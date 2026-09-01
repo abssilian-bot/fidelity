@@ -1,5 +1,9 @@
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
+import fastifyStatic from '@fastify/static'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { PrismaClient } from '@prisma/client'
 import { registerSecurityHeaders, registerErrorHandler, rateLimit } from './lib/security.js'
 import { registerAuth } from './lib/auth.js'
@@ -36,6 +40,16 @@ authRoutes(app, prisma)
 restaurantRoutes(app, prisma)
 membershipRoutes(app, prisma)
 ledgerRoutes(app, prisma)
+
+// Front statique : sert l'app React compilée (app/dist) quand elle existe.
+// En prod (Render), le build compile le front en même temps → une seule adresse
+// pour l'app ET l'API. En dev sans build, l'API tourne seule, rien ne change.
+const currentDir = path.dirname(fileURLToPath(import.meta.url))
+const webDist = path.resolve(currentDir, '../../app/dist')
+if (fs.existsSync(webDist)) {
+  await app.register(fastifyStatic, { root: webDist })
+  app.log.info(`App web servie depuis ${webDist}`)
+}
 
 const port = Number(process.env.PORT || 3001)
 

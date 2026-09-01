@@ -6,8 +6,11 @@ import type { HistoryItem, Loyalty, ProgramClient, Restaurant, ScanEvent } from 
 // - Si l'API répond : les écrans affichent les VRAIES données du serveur.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// En ligne (app servie par le backend) : même adresse, '' = même origine.
+// En dev local : le front (port 3000) tape l'API (port 3001).
 export const API_URL: string =
-  (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3001'
+  (import.meta.env.VITE_API_URL as string | undefined) ??
+  (import.meta.env.DEV ? 'http://localhost:3001' : '')
 
 // Correspondance entre les slugs du backend et les ids utilisés par le front
 const SLUG_TO_ID: Record<string, string> = {

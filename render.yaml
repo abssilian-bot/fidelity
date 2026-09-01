@@ -1,11 +1,13 @@
-# Config Render — déploie l'API en un clic depuis le dépôt GitHub
+# Config Render — déploie l'app complète (front + API) en un clic depuis GitHub
+# Une seule adresse https://...onrender.com sert l'app ET l'API.
 services:
   - type: web
     name: fidelity-api
     runtime: node
     rootDir: backend
     plan: free
-    buildCommand: npm install && npm run build
+    # Compile d'abord l'app React (app/dist), puis l'API qui la sert
+    buildCommand: cd ../app && npm install && npm run build && cd ../backend && npm install && npm run build
     startCommand: npm start
     healthCheckPath: /health
     envVars:
@@ -14,4 +16,4 @@ services:
       - key: APP_SECRET
         sync: false # à remplir dans le dashboard Render
       - key: ALLOWED_ORIGINS
-        sync: false # on le remplira avec l'adresse Vercel du front
+        sync: false # optionnel : l'app est servie par l'API (même origine)
