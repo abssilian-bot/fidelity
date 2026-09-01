@@ -41,12 +41,18 @@ restaurantRoutes(app, prisma)
 membershipRoutes(app, prisma)
 ledgerRoutes(app, prisma)
 
-// Front statique : sert l'app React compilée (app/dist) quand elle existe.
-// En prod (Render), le build compile le front en même temps → une seule adresse
-// pour l'app ET l'API. En dev sans build, l'API tourne seule, rien ne change.
+// Front statique : sert l'app React compilée quand elle existe.
+// Deux emplacements possibles, le premier trouvé gagne :
+//  1. app/dist     → build frais (dev local, ou Render quand il compile le front)
+//  2. backend/public → copie figée commitée dans le dépôt (secours garanti)
+// En dev sans build, l'API tourne seule, rien ne change.
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
-const webDist = path.resolve(currentDir, '../../app/dist')
-if (fs.existsSync(webDist)) {
+const webCandidates = [
+  path.resolve(currentDir, '../../app/dist'),
+  path.resolve(currentDir, '../public'),
+]
+const webDist = webCandidates.find((dir) => fs.existsSync(path.join(dir, 'index.html')))
+if (webDist) {
   await app.register(fastifyStatic, { root: webDist })
   app.log.info(`App web servie depuis ${webDist}`)
 }
