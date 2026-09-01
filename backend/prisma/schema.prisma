@@ -1,0 +1,232 @@
+// Schéma Fidelity — v1
+// Règle d'or (blueprint Wallet) : le solde n'est JAMAIS stocké directement.
+// Il est dérivé du ledger ; LedgerEntry.balanceAfter est un cache écrit
+// dans la même transaction SQL que l'écriture.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  MEMBER
+  RESTAURANT
+  ADMIN
+}
+
+enum RestaurantStatus {
+  PENDING
+  VERIFIED
+  SUSPENDED
+}
+
+enum ProgramType {
+  STAMPS
+  POINTS
+}
+
+enum CardStyle {
+  BRAISE
+  CREME
+  ENCRE
+}
+
+enum EntryKind {
+  EARN          // crédit de points/coches
+  REDEEM        // consommation d'une récompense
+  REFUND        // écriture inverse après remboursement
+  ADJUST        // correction manuelle restaurateur (avec motif)
+  FOODSHARE     // crédit issu d'une republication (phase 3)
+}
+
+enum EntryStatus {
+  PENDING       // en attente de preuve (paiement)
+  CONFIRMED     // comptabilisée
+  REVERSED      // annulée par une écriture compensatrice
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  pseudo       String?  @unique
+  displayName  String?
+  bio          String?
+  avatarUrl    String?
+  role         Role     @default(MEMBER)
+  createdAt    DateTime @default(now())
+
+  restaurants  Restaurant[]      @relation("RestaurantOwner")
+  memberships  Membership[]
+  authoredOps  LedgerEntry[]     @relation("EntryAuthor")
+  posts        Post[]
+  likes        Like[]
+  comments     Comment[]
+  following    Follow[]          @relation("Follower")
+  followers    Follow[]          @relation("Followed")
+  favorites    RestaurantFavorite[]
+  reviews      Review[]
+}
+
+model Restaurant {
+  id          String           @id @default(cuid())
+  ownerId     String
+  owner       User             @relation("RestaurantOwner", fields: [ownerId], references: [id])
+  name        String
+  slug        String           @unique
+  siret       String?
+  status      RestaurantStatus @default(PENDING)
+  cuisine     String
+  description String           @default("")
+  address     String
+  district    String           @default("")
+  lat         Float?
+  lng         Float?
+  hours       Json             // [{ day: "vendredi", open: "11:30", close: "23:00" }]
+  diets       String[]         // ["Halal", "Végétarien", ...]
+  imageUrl    String           @default("")
+  menuPdfUrl  String?
+  deliverooUrl String?
+  createdAt   DateTime         @default(now())
+
+  program     LoyaltyProgram?
+  menuItems   MenuItem[]
+  memberships Membership[]
+  posts       Post[]
+  reviews     Review[]
+  favorites   RestaurantFavorite[]
+}
+
+model MenuItem {
+  id           String     @id @default(cuid())
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  name         String
+  description  String     @default("")
+  priceCents   Int
+  position     Int        @default(0)
+}
+
+model LoyaltyProgram {
+  id           String      @id @default(cuid())
+  restaurantId String      @unique
+  restaurant   Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  type         ProgramType
+  title        String
+  target       Int         // coches (<=10) ou objectif de points
+  reward       String
+  rule         String
+  style        CardStyle   @default(BRAISE)
+  active       Boolean     @default(true)
+  updatedAt    DateTime    @updatedAt
+}
+
+model Membership {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  // QR privé membre : identifiant aléatoire, ne contient NI téléphone NI solde
+  publicCode   String   @unique @default(cuid())
+  createdAt    DateTime @default(now())
+
+  entries      LedgerEntry[]
+
+  @@unique([userId, restaurantId])
+}
+
+model LedgerEntry {
+  id             String      @id @default(cuid())
+  membershipId   String
+  membership     Membership  @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  delta          Int         // +crédit / -débit
+  balanceAfter   Int         // cache écrit dans la transaction
+  kind           EntryKind
+  status         EntryStatus @default(CONFIRMED)
+  source         String      // "scan", "pos:<system>", "foodshare", "admin"
+  // Anti-doublon : restaurant + source + référence externe (ticket, scan, post)
+  idempotencyKey String      @unique
+  authorId       String?     // employé/admin qui a validé l'opération
+  author         User?       @relation("EntryAuthor", fields: [authorId], references: [id])
+  note           String?
+  createdAt      DateTime    @default(now())
+
+  @@index([membershipId, createdAt])
+}
+
+model RestaurantFavorite {
+  id           String     @id @default(cuid())
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+
+  @@unique([userId, restaurantId])
+}
+
+model Review {
+  id           String     @id @default(cuid())
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  authorId     String
+  author       User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  rating       Int        // 1..5
+  text         String     @default("")
+  reply        String?    // réponse du restaurateur
+  createdAt    DateTime   @default(now())
+
+  @@unique([restaurantId, authorId])
+}
+
+// ---------- Couche sociale (phase 3 — tables prêtes dès maintenant) ----------
+
+model Post {
+  id                 String      @id @default(cuid())
+  authorId           String?
+  author             User?       @relation(fields: [authorId], references: [id])
+  restaurantId       String?     // post publié par un restaurant
+  restaurant         Restaurant? @relation(fields: [restaurantId], references: [id])
+  taggedRestaurantId String?     // FOODSHARE : restaurant identifié par un membre
+  imageUrl           String
+  caption            String      @default("")
+  sponsored          Boolean     @default(false)
+  createdAt          DateTime    @default(now())
+
+  likes    Like[]
+  comments Comment[]
+}
+
+model Like {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postId String
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  text      String
+  createdAt DateTime @default(now())
+}
+
+model Follow {
+  id         String @id @default(cuid())
+  followerId String
+  follower   User   @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  followedId String
+  followed   User   @relation("Followed", fields: [followedId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followedId])
+}

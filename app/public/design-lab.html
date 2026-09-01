@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Fidelity — Laboratoire de design</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Instrument+Sans:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --cream: #fbf5ed;
+    --surface: #ffffff;
+    --line: #ecdfcf;
+    --ink: #2e1a0e;
+    --muted: #8f7261;
+    --orange: #c4410f;
+    --orange-stamp: #c8450f;
+    --brown: #46230f;
+    --card-cream: #f3e3cd;
+    --card-tan: #cfa27c;
+    --card-frame: rgba(216, 168, 124, 0.55);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--cream);
+    color: var(--ink);
+    font-family: 'Inter', -apple-system, sans-serif;
+    padding-bottom: 80px;
+  }
+  .lab-header {
+    background: var(--brown); color: var(--card-cream);
+    padding: 34px 24px; text-align: center;
+  }
+  .lab-header h1 { font-size: 26px; font-weight: 600; letter-spacing: -0.01em; }
+  .lab-header p { margin-top: 8px; font-size: 14px; color: var(--card-tan); }
+  .lab-nav {
+    display: flex; justify-content: center; gap: 10px; flex-wrap: wrap;
+    padding: 18px 16px; position: sticky; top: 0; background: rgba(251,245,237,0.95);
+    backdrop-filter: blur(6px); z-index: 10; border-bottom: 1px solid var(--line);
+  }
+  .lab-nav a {
+    text-decoration: none; color: var(--ink); font-size: 13.5px; font-weight: 600;
+    background: var(--surface); border: 1.5px solid var(--line); border-radius: 999px;
+    padding: 9px 18px;
+  }
+  .lab-nav a:hover { border-color: var(--orange); color: var(--orange); }
+  section { max-width: 980px; margin: 0 auto; padding: 40px 20px 10px; }
+  .section-label {
+    font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--muted);
+  }
+  .section-title { font-size: 24px; font-weight: 600; margin: 6px 0 4px; letter-spacing: -0.01em; }
+  .section-sub { font-size: 14px; color: var(--muted); margin-bottom: 24px; }
+  .variant-tag {
+    display: inline-block; font-size: 11.5px; font-weight: 700; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--orange); background: #fbe9dc;
+    border-radius: 999px; padding: 5px 12px; margin-bottom: 12px;
+  }
+  .variant-name { font-size: 17px; font-weight: 600; margin-bottom: 2px; }
+  .variant-note { font-size: 13px; color: var(--muted); margin-bottom: 16px; }
+  .phone {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 28px;
+    padding: 26px 22px; max-width: 420px; margin-bottom: 36px;
+  }
+  .row { display: flex; gap: 24px; flex-wrap: wrap; }
+  .row > * { flex: 1; min-width: 300px; }
+
+  /* ---------- Échantillons typographiques ---------- */
+  .font-a { font-family: 'Inter', sans-serif; }
+  .font-b { font-family: 'Plus Jakarta Sans', sans-serif; }
+  .font-c { font-family: 'Instrument Sans', sans-serif; }
+  .font-d { font-family: 'Montserrat', sans-serif; }
+  .sample-h1 { font-size: 29px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
+  .sample-h2 { font-size: 19px; font-weight: 600; letter-spacing: -0.01em; margin-top: 18px; }
+  .sample-body { font-size: 15px; font-weight: 400; line-height: 1.55; color: #5c4636; margin-top: 6px; }
+  .sample-small { font-size: 13px; font-weight: 400; color: var(--muted); margin-top: 10px; }
+  .sample-strong { font-size: 15px; font-weight: 600; margin-top: 10px; }
+  .weight-scale div { padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 16px; }
+  .w400 { font-weight: 400; } .w500 { font-weight: 500; } .w600 { font-weight: 600; } .w700 { font-weight: 700; }
+  .weight-scale span { float: right; font-size: 12px; color: var(--muted); font-weight: 400; }
+
+  /* ---------- Éléments UI ---------- */
+  .ui-searchbar {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--surface); border: 1.5px solid var(--line); border-radius: 999px;
+    padding: 8px 8px 8px 18px; font-size: 15px; margin-top: 14px;
+  }
+  .ui-searchbar .txt { flex: 1; font-weight: 400; }
+  .ui-searchbar .circle {
+    width: 42px; height: 42px; border-radius: 999px; background: var(--orange);
+    display: flex; align-items: center; justify-content: center; color: #fdf3ea; font-size: 17px;
+  }
+  .ui-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 999px; padding: 13px 22px; font-size: 15px; cursor: pointer;
+  }
+  .ui-btn-primary { background: var(--orange); color: #fdf3ea; font-weight: 600; border: none; }
+  .ui-btn-outline { background: var(--surface); border: 1.5px solid var(--line); font-weight: 500; }
+  .ui-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--surface); border: 1.5px solid var(--line); border-radius: 999px;
+    padding: 10px 18px; font-size: 14px; font-weight: 500; margin: 4px 6px 0 0;
+  }
+  .ui-chip.selected { border-color: var(--orange); color: var(--orange); background: #fbe9dc; }
+  .ui-resto {
+    border: 1px solid var(--line); border-radius: 22px; overflow: hidden; margin-top: 16px;
+  }
+  .ui-resto .img { height: 130px; background: linear-gradient(120deg, #8a5a33, #46230f); }
+  .ui-resto .body { padding: 13px 16px 15px; }
+  .ui-resto .line1 { display: flex; justify-content: space-between; font-size: 15.5px; }
+  .ui-resto .line1 b { font-weight: 600; }
+  .ui-resto .line1 span { font-weight: 500; font-size: 14px; }
+  .ui-resto .line2 { font-size: 13.5px; color: var(--muted); font-weight: 400; margin-top: 2px; }
+  .ui-resto .line3 { font-size: 13px; color: #6b4a30; font-weight: 500; margin-top: 5px; }
+  .ui-resto .line4 { font-size: 12.5px; color: #3d7a4a; font-weight: 500; margin-top: 2px; }
+
+  /* ============================================================
+     CARTES DE FIDÉLITÉ — VARIANTES
+     ============================================================ */
+  .card { border-radius: 26px; padding: 22px; margin-bottom: 14px; }
+  .card-head { display: flex; align-items: center; gap: 13px; margin-bottom: 18px; }
+  .card-logo {
+    width: 46px; height: 46px; border-radius: 999px; background: var(--orange-stamp);
+    color: #fdf3ea; font-weight: 700; font-size: 20px;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .card-head .names { flex: 1; }
+  .card-head .names b { display: block; font-size: 17px; font-weight: 600; }
+  .card-head .names small {
+    font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; font-weight: 500;
+  }
+  .card-gift { font-size: 22px; opacity: 0.85; }
+  .stamps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; max-width: 290px; }
+  .stamp {
+    aspect-ratio: 1; border-radius: 999px; display: flex; align-items: center; justify-content: center;
+  }
+  .card-rule-label { font-size: 14px; margin-top: 18px; }
+  .card-rule { font-size: 15.5px; margin-top: 3px; }
+  .card-reward-label { font-size: 11.5px; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 500; margin-top: 16px; }
+  .card-reward { font-size: 18px; font-weight: 600; margin-top: 4px; }
+  .card-effort { font-size: 13.5px; margin-top: 6px; }
+  .pbar { height: 11px; border-radius: 999px; overflow: hidden; margin-top: 4px; }
+  .pbar i { display: block; height: 100%; border-radius: 999px; }
+  .ppoints { font-size: 15px; font-weight: 600; margin-top: 8px; }
+
+  /* V1 — Fidèle à la référence (marron, cadre intérieur) */
+  .v1 {
+    background: var(--brown); color: var(--card-cream);
+    box-shadow: inset 0 0 0 1.5px var(--card-frame), inset 0 0 0 9px var(--brown);
+    border: 1.5px solid var(--card-frame);
+  }
+  .v1 .card-head .names small { color: var(--card-tan); }
+  .v1 .card-gift { color: var(--card-tan); }
+  .v1 .stamp.filled { background: var(--orange-stamp); color: #f7e8d6; font-size: 15px; }
+  .v1 .stamp.empty { border: 2px solid rgba(216,168,124,0.6); }
+  .v1 .card-divider { border-top: 1.5px solid rgba(216,168,124,0.4); margin-top: 20px; }
+  .v1 .card-rule-label { color: var(--card-tan); }
+  .v1 .card-rule { color: #f7ecdc; font-weight: 500; }
+  .v1 .card-reward-label { color: var(--card-tan); }
+  .v1 .card-reward { color: #f7ecdc; }
+  .v1 .card-effort { color: var(--card-tan); }
+  .v1 .pbar { background: rgba(247,234,217,0.2); }
+  .v1 .pbar i { background: var(--orange-stamp); }
+
+  /* V2 — Crème (clair, même structure) */
+  .v2 {
+    background: #f6e8d3; color: var(--ink);
+    border: 1.5px solid rgba(70,35,15,0.3);
+    box-shadow: inset 0 0 0 1.5px rgba(70,35,15,0.18), inset 0 0 0 9px #f6e8d3;
+  }
+  .v2 .card-head .names small { color: #8a5a33; }
+  .v2 .card-gift { color: #8a5a33; }
+  .v2 .stamp.filled { background: var(--orange); color: #fdf3ea; font-size: 15px; }
+  .v2 .stamp.empty { border: 2px solid rgba(70,35,15,0.3); }
+  .v2 .card-divider { border-top: 1.5px solid rgba(70,35,15,0.22); margin-top: 20px; }
+  .v2 .card-rule-label { color: #8a5a33; }
+  .v2 .card-rule { font-weight: 500; }
+  .v2 .card-reward-label { color: #8a5a33; }
+  .v2 .card-effort { color: #8a5a33; }
+
+  /* V3 — Encre (noir profond) */
+  .v3 {
+    background: #17100b; color: #f3e3cd;
+    border: 1.5px solid rgba(216,168,124,0.35);
+    box-shadow: inset 0 0 0 1.5px rgba(216,168,124,0.22), inset 0 0 0 9px #17100b;
+  }
+  .v3 .card-head .names small { color: #a8875f; }
+  .v3 .card-gift { color: #a8875f; }
+  .v3 .stamp.filled { background: var(--orange-stamp); color: #f7e8d6; font-size: 15px; }
+  .v3 .stamp.empty { border: 2px solid rgba(216,168,124,0.4); }
+  .v3 .card-divider { border-top: 1.5px solid rgba(216,168,124,0.28); margin-top: 20px; }
+  .v3 .card-rule-label { color: #a8875f; }
+  .v3 .card-rule { color: #efe0c8; font-weight: 500; }
+  .v3 .card-reward-label { color: #a8875f; }
+  .v3 .card-effort { color: #a8875f; }
+
+  /* V4 — Duo (bandeau orange) */
+  .v4 { background: var(--brown); color: var(--card-cream); padding: 0; overflow: hidden; }
+  .v4 .band {
+    background: var(--orange-stamp); color: #fdf3ea; padding: 18px 22px;
+    display: flex; align-items: center; gap: 13px;
+  }
+  .v4 .band .card-logo { background: rgba(255,255,255,0.18); }
+  .v4 .band .names b { font-size: 17px; font-weight: 600; display: block; }
+  .v4 .band .names small { font-size: 11px; letter-spacing: 0.16em; opacity: 0.8; }
+  .v4 .band .card-gift { margin-left: auto; }
+  .v4 .inner { padding: 20px 22px 22px; }
+  .v4 .stamp.filled { background: var(--orange-stamp); color: #f7e8d6; font-size: 15px; }
+  .v4 .stamp.empty { border: 2px solid rgba(216,168,124,0.5); }
+  .v4 .card-divider { border-top: 1.5px solid rgba(216,168,124,0.35); margin-top: 20px; }
+  .v4 .card-rule-label { color: var(--card-tan); }
+  .v4 .card-rule { color: #f7ecdc; font-weight: 500; }
+  .v4 .card-reward-label { color: var(--card-tan); }
+  .v4 .card-effort { color: var(--card-tan); }
+
+  /* V5 — Ticket (clair, bord perforé) */
+  .v5 {
+    background: var(--surface); color: var(--ink);
+    border: 1.5px solid var(--line); border-radius: 22px; position: relative;
+  }
+  .v5::before, .v5::after {
+    content: ''; position: absolute; width: 26px; height: 26px; border-radius: 999px;
+    background: var(--cream); border: 1.5px solid var(--line); top: 55%;
+  }
+  .v5::before { left: -14px; }
+  .v5::after { right: -14px; }
+  .v5 .card-head .names small { color: var(--muted); }
+  .v5 .card-gift { color: var(--orange); }
+  .v5 .stamp.filled { background: var(--orange); color: #fdf3ea; font-size: 15px; }
+  .v5 .stamp.empty { border: 2px solid #e2d2bd; }
+  .v5 .card-divider { border-top: 2px dashed #e2d2bd; margin-top: 20px; }
+  .v5 .card-rule-label { color: var(--muted); }
+  .v5 .card-rule { font-weight: 500; }
+  .v5 .card-reward-label { color: var(--muted); }
+  .v5 .card-effort { color: var(--muted); }
+  .v5 .pbar { background: #f1e4d3; }
+  .v5 .pbar i { background: var(--orange); }
+
+  /* V6 — Photo (image en tête) */
+  .v6 { background: var(--brown); color: var(--card-cream); padding: 0; overflow: hidden; }
+  .v6 .photo { height: 110px; background: linear-gradient(120deg, #8a5a33, #2a1409); position: relative; }
+  .v6 .photo .card-logo { position: absolute; bottom: -23px; left: 22px; border: 3px solid var(--brown); }
+  .v6 .inner { padding: 34px 22px 22px; }
+  .v6 .card-head { margin-bottom: 14px; }
+  .v6 .card-head .names small { color: var(--card-tan); }
+  .v6 .card-gift { color: var(--card-tan); }
+  .v6 .stamp.filled { background: var(--orange-stamp); color: #f7e8d6; font-size: 15px; }
+  .v6 .stamp.empty { border: 2px solid rgba(216,168,124,0.5); }
+  .v6 .card-divider { border-top: 1.5px solid rgba(216,168,124,0.35); margin-top: 20px; }
+  .v6 .card-rule-label { color: var(--card-tan); }
+  .v6 .card-rule { color: #f7ecdc; font-weight: 500; }
+  .v6 .card-reward-label { color: var(--card-tan); }
+  .v6 .card-effort { color: var(--card-tan); }
+</style>
+</head>
+<body>
+
+<header class="lab-header">
+  <h1>Laboratoire de design — Fidelity</h1>
+  <p>Choisis ta typographie et ta carte de fidélité. Dis-moi les codes (ex. « Typo B + Carte V1 ») et j'implémente.</p>
+</header>
+
+<nav class="lab-nav">
+  <a href="#typo">1 · Typographie</a>
+  <a href="#cartes">2 · Cartes de fidélité</a>
+  <a href="#ui">3 · Éléments d'interface</a>
+</nav>
+
+<!-- ==================== 1. TYPOGRAPHIE ==================== -->
+<section id="typo">
+  <span class="section-label">Section 1</span>
+  <h2 class="section-title">Typographie</h2>
+  <p class="section-sub">L'app d'origine utilise un sans-serif grotesque — pas de serif. Quatre candidats gratuits (Google Fonts), avec les vrais textes de l'app.</p>
+
+  <div class="row">
+    <div class="phone font-a">
+      <span class="variant-tag">Typo A — Inter</span>
+      <p class="variant-note">La plus proche de ta référence. Neutre, très lisible, le standard des apps modernes.</p>
+      <div class="sample-h1">À table, tout simplement</div>
+      <div class="sample-body">Des tables choisies pour leur cuisine, leur quartier et leur programme fidélité.</div>
+      <div class="sample-h2">La table de la semaine</div>
+      <div class="sample-strong">Chez Amina ★ 4,9</div>
+      <div class="sample-small">Cuisine marocaine · 800 m · Ouvert maintenant</div>
+    </div>
+
+    <div class="phone font-b">
+      <span class="variant-tag">Typo B — Plus Jakarta Sans</span>
+      <p class="variant-note">Un peu plus chaleureuse et ronde qu'Inter, tout en restant nette.</p>
+      <div class="sample-h1">À table, tout simplement</div>
+      <div class="sample-body">Des tables choisies pour leur cuisine, leur quartier et leur programme fidélité.</div>
+      <div class="sample-h2">La table de la semaine</div>
+      <div class="sample-strong">Chez Amina ★ 4,9</div>
+      <div class="sample-small">Cuisine marocaine · 800 m · Ouvert maintenant</div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="phone font-c">
+      <span class="variant-tag">Typo C — Instrument Sans</span>
+      <p class="variant-note">Entre les deux : grotesque moderne avec un léger caractère.</p>
+      <div class="sample-h1">À table, tout simplement</div>
+      <div class="sample-body">Des tables choisies pour leur cuisine, leur quartier et leur programme fidélité.</div>
+      <div class="sample-h2">La table de la semaine</div>
+      <div class="sample-strong">Chez Amina ★ 4,9</div>
+      <div class="sample-small">Cuisine marocaine · 800 m · Ouvert maintenant</div>
+    </div>
+
+    <div class="phone font-d">
+      <span class="variant-tag">Typo D — Montserrat</span>
+      <p class="variant-note">Géométrique et affirmée. Plus « poster », moins discrète.</p>
+      <div class="sample-h1">À table, tout simplement</div>
+      <div class="sample-body">Des tables choisies pour leur cuisine, leur quartier et leur programme fidélité.</div>
+      <div class="sample-h2">La table de la semaine</div>
+      <div class="sample-strong">Chez Amina ★ 4,9</div>
+      <div class="sample-small">Cuisine marocaine · 800 m · Ouvert maintenant</div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="phone font-a">
+      <span class="variant-tag">Graisses — fini le gras partout</span>
+      <p class="variant-note">Ce que je propose d'appliquer partout : titres en 600, texte en 400, emphase en 500. Le 700 seulement pour le H1 d'accueil.</p>
+      <div class="weight-scale">
+        <div class="w400">Une coche par visite, hors boissons. <span>400 · texte courant</span></div>
+        <div class="w500">Fidélité · 10 coches = un plat offert <span>500 · emphase discrète</span></div>
+        <div class="w600">Chez Amina <span>600 · titres &amp; noms</span></div>
+        <div class="w700">À table, tout simplement <span>700 · H1 uniquement</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== 2. CARTES ==================== -->
+<section id="cartes">
+  <span class="section-label">Section 2</span>
+  <h2 class="section-title">Cartes de fidélité</h2>
+  <p class="section-sub">Six propositions. V1 est la réplique exacte de ta capture ; les autres sont des variations. Chacune existe en version coches et points.</p>
+
+  <div class="row">
+    <div>
+      <span class="variant-tag">V1 — Fidèle (réplique de ta capture)</span>
+      <p class="variant-note">Marron uni, double cadre fin, tampons orange, hiérarchie douce. C'est le design de ta vidéo, corrigé au pixel près.</p>
+      <div class="card v1">
+        <div class="card-head">
+          <span class="card-logo">F</span>
+          <div class="names"><b>Chez Amina</b><small>CARTE FIDELITY</small></div>
+          <span class="card-gift">🎁</span>
+        </div>
+        <div class="stamps">
+          <span class="stamp filled">✓</span><span class="stamp filled">✓</span><span class="stamp filled">✓</span><span class="stamp filled">✓</span><span class="stamp filled">✓</span>
+          <span class="stamp filled">✓</span><span class="stamp filled">✓</span><span class="stamp filled">✓</span><span class="stamp filled">✓</span><span class="stamp empty"></span>
+        </div>
+        <div class="card-divider"></div>
+        <p class="card-rule-label">Comment gagner</p>
+        <p class="card-rule">Une coche par visite, hors boissons.</p>
+        <p class="card-reward-label">Votre prochaine récompense</p>
+        <p class="card-reward">Un plat signature offert</p>
+        <p class="card-effort">Encore un petit effort</p>
+      </div>
+      <div class="card v1">
+        <div class="card-head">
+          <span class="card-logo">F</span>
+          <div class="names"><b>Atelier Miso</b><small>CARTE FIDELITY</small></div>
+          <span class="card-gift">🎁</span>
+        </div>
+        <div class="pbar"><i style="width:92%"></i></div>
+        <p class="ppoints">740 / 800 points</p>
+        <div class="card-divider"></div>
+        <p class="card-rule-label">Comment gagner</p>
+        <p class="card-rule">Dix points par euro dépensé.</p>
+        <p class="card-reward-label">Votre prochaine récompense</p>
+        <p class="card-reward">Un menu midi offert</p>
+        <p class="card-effort">Encore un petit effort</p>
+      </div>
+    </div>
+
+    <div>
+      <span class="variant-tag">V2 — Crème</span>
+      <p class="variant-note">La même structure en clair. Plus douce, s'intègre mieux au fond crème de l'app.</p>
+      <div class="card v2">
+        <div class="card-head">
+          <span class="card-logo">F</span>
+          <div class="names"><b>Chez Amina</b><small>CARTE FIDELITY</small></div>
+          <span class="card-gift">🎁</span>
+        </div>
+        <div class="stamps">
+          <span class="stamp filled">✓</span><span class="stamp filled">✓</span><span class="stamp filled">✓</span><span class="stamp filled">✓</span><span class="stamp filled">✓</span>
+          <span class="stamp filled">✓</span><span class="stamp filled">✓</span><span class="stamp filled">✓</span><span class="stamp filled">✓</span><span class="stamp empty"></span>
+        </div>
+        <div class="card-divider"></div>
+        <p class="card-rule-label">Comment gagner</p>
+        <p class="card-rule">Une coche par visite, hors boissons.</p>
+        <p class="card-reward-label">Votre prochaine récompense</p>
+        <p class="card-reward">Un plat signature offert</p>
+        <p class="card-effort">Encore un petit effort</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div>
+      <span class="variant-tag">V3 — Encre</span>
+      <p class="variant-note">Noir profond, plus premium/nocturne. Le style « Encre » de l'éditeur.</p>
+      <div class="card v3">
+        <div class="card-head">
+          <span class="card-logo">F</span>
+          <div class="names"><b>Braise &amp; Basilic</b><small>CARTE FIDELITY</small></div>
+          <span class="card-gift">🎁</span>
+        </div>
+        <div class="stamps">
+          <span class="stamp filled">✓</span><span class="stamp filled">✓</span><span class="stamp filled">✓</span><span class="stamp empty"></span><span class="stamp empty"></span>
+          <span class="stamp empty"></span>
+        </div>
+        <div class="card-divider"></div>
+        <p class="card-rule-label">Comment gagner</p>
+        <p class="card-rule">Une coche par passage.</p>
+        <p class="card-reward-label">Votre prochaine récompense</p>
+        <p class="card-reward">Une assiette braisée offerte</p>
+        <p class="card-effort">Encore un petit effort</p>
+      </div>
+    </div>
+
+    <div>
+      <span class="variant-tag">V4 — Duo</span>
+      <p class="variant-note">Bandeau orange en tête, corps marron. Plus énergique, très marqué « Fidelity ».</p>
+      <div class="card v4">
+        <div class="band">
+          <span class="card-logo">F</span>
+          <div class="names"><b>Chez Amina</b><small>CARTE FIDELITY</small></div>
+          <span class="card-gift">🎁</span>
+        </div>
+        <div class="inner">
+          <div class="stamps">
+            <span class="stamp filled">✓</span><span class="stamp filled">✓</span><span class="stamp filled">✓</span><span class="stamp filled">✓</span><span class="stamp filled">✓</span>
+            <span class="stamp filled">✓</span><span class="stamp filled">✓</span><span class="stamp filled">✓</span><span class="stamp filled">✓</span><span class="stamp empty"></span>
+          </div>
+          <div class="card-divider"></div>
+          <p class="card-rule-label">Comment gagner</p>
+          <p class="card-rule">Une coche par visite, hors boissons.</p>
+          <p class="card-reward-label">Votre prochaine récompense</p>
+          <p class="card-reward">Un plat signature offert</p>
+          <p class="card-effort">Encore un petit effort</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div>
+      <span class="variant-tag">V5 — Ticket</span>
+      <p class="variant-note">Clin d'œil au ticket de caisse : claire, encoches latérales, pointillés. Version « points » en exemple.</p>
+      <div class="card v5">
+        <div class="card-head">
+          <span class="card-logo">F</span>
+          <div class="names"><b>Atelier Miso</b><small>CARTE FIDELITY</small></div>
+          <span class="card-gift">🎁</span>
+        </div>
+        <div class="pbar"><i style="width:92%"></i></div>
+        <p class="ppoints">740 / 800 points</p>
+        <div class="card-divider"></div>
+        <p class="card-rule-label">Comment gagner</p>
+        <p class="card-rule">Dix points par euro dépensé.</p>
+        <p class="card-reward-label">Votre prochaine récompense</p>
+        <p class="card-reward">Un menu midi offert</p>
+        <p class="card-effort">Encore un petit effort</p>
+      </div>
+    </div>
+
+    <div>
+      <span class="variant-tag">V6 — Photo</span>
+      <p class="variant-note">L'image du restaurant en bandeau. La carte devient une mini-vitrine du lieu.</p>
+      <div class="card v6">
+        <div class="photo"><span class="card-logo">F</span></div>
+        <div class="inner">
+          <div class="card-head" style="margin-bottom:14px">
+            <div class="names"><b>Chez Amina</b><small>CARTE FIDELITY</small></div>
+            <span class="card-gift">🎁</span>
+          </div>
+          <div class="stamps">
+            <span class="stamp filled">✓</span><span class="stamp filled">✓</span><span class="stamp filled">✓</span><span class="stamp filled">✓</span><span class="stamp filled">✓</span>
+            <span class="stamp filled">✓</span><span class="stamp filled">✓</span><span class="stamp filled">✓</span><span class="stamp filled">✓</span><span class="stamp empty"></span>
+          </div>
+          <div class="card-divider"></div>
+          <p class="card-rule-label">Comment gagner</p>
+          <p class="card-rule">Une coche par visite, hors boissons.</p>
+          <p class="card-reward-label">Votre prochaine récompense</p>
+          <p class="card-reward">Un plat signature offert</p>
+          <p class="card-effort">Encore un petit effort</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== 3. UI ==================== -->
+<section id="ui">
+  <span class="section-label">Section 3</span>
+  <h2 class="section-title">Éléments d'interface avec la nouvelle typographie</h2>
+  <p class="section-sub">Rendu des composants courants en Inter avec graisses assagies — pour valider l'ensemble.</p>
+
+  <div class="row">
+    <div class="phone font-a">
+      <span class="variant-tag">Recherche &amp; boutons</span>
+      <div class="ui-searchbar">
+        <span>🔍</span><span class="txt">Paris et alentours</span><span class="circle">☰</span>
+      </div>
+      <div style="margin-top:16px; display:flex; gap:10px; flex-wrap:wrap;">
+        <button class="ui-btn ui-btn-primary">Afficher 6 restaurants</button>
+        <button class="ui-btn ui-btn-outline">Réinitialiser</button>
+      </div>
+      <div style="margin-top:14px;">
+        <span class="ui-chip selected">✓ Halal</span>
+        <span class="ui-chip">Végétarien</span>
+        <span class="ui-chip">Végan</span>
+      </div>
+    </div>
+
+    <div class="phone font-a">
+      <span class="variant-tag">Carte restaurant</span>
+      <div class="ui-resto">
+        <div class="img"></div>
+        <div class="body">
+          <div class="line1"><b>Chez Amina</b><span>★ 4,9</span></div>
+          <div class="line2">Cuisine marocaine · 800 m</div>
+          <div class="line3">Fidélité · 10 coches = un plat signature offert</div>
+          <div class="line4">Ouvert maintenant</div>
+        </div>
+      </div>
+      <p class="variant-note" style="margin-top:14px">Le nom en 600, le détail en 400 grisé, l'avantage fidélité en 500, le statut en 500 vert. Plus de gras généralisé.</p>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>

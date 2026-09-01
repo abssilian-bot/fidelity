@@ -1,0 +1,17 @@
+# Config Render — déploie l'API en un clic depuis le dépôt GitHub
+services:
+  - type: web
+    name: fidelity-api
+    runtime: node
+    rootDir: backend
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false # à remplir dans le dashboard Render
+      - key: APP_SECRET
+        sync: false # à remplir dans le dashboard Render
+      - key: ALLOWED_ORIGINS
+        sync: false # on le remplira avec l'adresse Vercel du front

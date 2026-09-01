@@ -1,0 +1,28 @@
+# Dépendances et builds
+node_modules
+dist
+
+# Secrets — JAMAIS sur GitHub
+.env
+
+# Logs
+*.log
+
+# Fichiers lourds / générés (pas utiles dans le dépôt)
+video-compressed.mp4
+pdf-qa/
+
+# Documents personnels hors projet (voyages, budgets perso)
+BOOK BARCEONE ROVER 2024.docx
+BOOK BERLIN ROVER 2026.pdf
+Budget_previsionnel_CAPE_Berlin.xlsx
+Budget_previsionnel_CAPE_Berlin_sans_vols.pdf
+Budget_previsionnel_CAPE_Berlin_sans_vols.xlsx
+Dossier_Organisation_Berlin_compressed.pdf
+IMG_6936.jpeg
+scripts/create_book_berlin.js
+scripts/fix_budget_cache.py
+
+# scripts personnels Berlin
+scripts/build_book_berlin_pdf.py
+scripts/build_budget_berlin.py
