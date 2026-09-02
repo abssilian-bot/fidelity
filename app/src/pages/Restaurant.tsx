@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Clock3, CreditCard, Gift, Heart, Info, MapPin, Navigation, Share2, Star } from 'lucide-react'
+import { Check, Clock3, CreditCard, Gift, Heart, Info, MapPin, Navigation, Share2, Star } from 'lucide-react'
 import type { Restaurant } from '../data'
 import type { CommonProps } from '../nav'
 import { HeartButton, LoyaltyCard, Tabs } from '../components/kit'
@@ -163,8 +163,11 @@ export function RestaurantPage({ go, restaurant, favorites, toggleFavorite, shar
 
 export function CardDetailPage({ go, restaurant }: CommonProps & { restaurant: Restaurant }) {
   const loyalty = restaurant.loyalty
-  const remaining = Math.max(0, loyalty.target - loyalty.current)
+  const tiers = loyalty.tiers?.length ? loyalty.tiers : [{ at: loyalty.target, reward: loyalty.reward }]
+  const nextTier = tiers.find((tier) => tier.at > loyalty.current) ?? tiers[tiers.length - 1]
+  const remaining = Math.max(0, nextTier.at - loyalty.current)
   const unit = loyalty.type === 'stamps' ? `coche${remaining > 1 ? 's' : ''}` : 'points'
+  const unitPlural = loyalty.type === 'stamps' ? 'coches' : 'points'
 
   return (
     <main className="page">
@@ -183,12 +186,34 @@ export function CardDetailPage({ go, restaurant }: CommonProps & { restaurant: R
           <Gift size={20} />
         </span>
         <div>
-          <h2>{loyalty.reward}</h2>
+          <h2>{nextTier.reward}</h2>
           <p>{loyalty.rule}</p>
         </div>
         <strong>
-          {remaining} {unit} avant la récompense
+          {remaining === 0 ? 'Palier atteint !' : `${remaining} ${unit} avant le palier`}
         </strong>
+      </section>
+
+      <section className="tier-list">
+        <h2 style={{ margin: 0 }}>Paliers de récompenses</h2>
+        {tiers.map((tier) => {
+          const reached = loyalty.current >= tier.at
+          const isNext = tier === nextTier && !reached
+          return (
+            <div className={`tier-row ${reached ? 'reached' : ''} ${isNext ? 'next' : ''}`} key={tier.at}>
+              <span className="tier-check">{reached && <Check size={13} strokeWidth={3} />}</span>
+              <span className="visit-copy">
+                <strong>{tier.reward}</strong>
+                <small>
+                  {reached ? 'Débloqué — à retirer en caisse' : isNext ? 'Prochain palier' : 'Palier suivant'}
+                </small>
+              </span>
+              <span className="tier-at">
+                {tier.at} {loyalty.type === 'stamps' ? (tier.at > 1 ? 'coches' : 'coche') : 'points'}
+              </span>
+            </div>
+          )
+        })}
       </section>
 
       <section className="progress-panel">
@@ -198,7 +223,7 @@ export function CardDetailPage({ go, restaurant }: CommonProps & { restaurant: R
         <div>
           <p>Progression</p>
           <strong>
-            {loyalty.current} sur {loyalty.target} {loyalty.type === 'stamps' ? 'coches' : 'points'}
+            {loyalty.current} sur {loyalty.target} {unitPlural}
           </strong>
         </div>
       </section>

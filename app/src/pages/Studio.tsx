@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Check, CreditCard, Edit3, Gift, Plus, Settings2, Trash2 } from 'lucide-react'
-import type { Loyalty, MenuItem, Restaurant } from '../data'
+import { loyaltyRule } from '../data'
+import type { Loyalty, MenuItem, Restaurant, RewardTier } from '../data'
 import type { CommonProps } from '../nav'
 import { LoyaltyCard, Notice, Tabs } from '../components/kit'
 import { publishProfile, publishProgram } from '../lib/api'
@@ -238,23 +239,59 @@ export function LoyaltyEditorPage({ go, restaurant, draft, setDraft, notify }: C
     notify(ok ? 'Programme publié sur le serveur ✅' : 'Publication impossible — serveur hors ligne, brouillon conservé en local')
   }
 
-  const setType = (type: Loyalty['type']) => {
-    setDraft({
-      ...draft,
-      type,
-      current: type === 'stamps' ? 9 : 740,
-      target: type === 'stamps' ? 10 : 800,
-      rule: type === 'stamps' ? 'Une coche par visite, hors boissons.' : 'Dix points par euro dépensé.',
-    })
+  const isStamps = draft.type === 'stamps'
+  const unit = isStamps ? 'coches' : 'points'
+  const maxTierAt = isStamps ? 10 : Number.POSITIVE_INFINITY
+
+  /** Trie les paliers, synchronise target/reward avec le dernier palier et régénère la règle de gain. */
+  const derive = (loyalty: Loyalty): Loyalty => {
+    const tiers = [...loyalty.tiers].sort((a, b) => a.at - b.at)
+    const last = tiers[tiers.length - 1] ?? { at: 1, reward: 'Une récompense offerte' }
+    return { ...loyalty, tiers, target: last.at, reward: last.reward, rule: loyaltyRule(loyalty) }
   }
-  const updateTarget = (value: string) => {
+
+  const setType = (type: Loyalty['type']) => {
+    setDraft(
+      derive({
+        ...draft,
+        type,
+        current: type === 'stamps' ? 9 : 740,
+        pointsPerEuro: type === 'points' ? draft.pointsPerEuro ?? 10 : draft.pointsPerEuro,
+        eurosPerStamp: type === 'stamps' ? draft.eurosPerStamp ?? 0 : draft.eurosPerStamp,
+        tiers:
+          type === 'stamps'
+            ? [
+                { at: 4, reward: 'Une entrée offerte' },
+                { at: 10, reward: 'Un plat offert' },
+              ]
+            : [
+                { at: 200, reward: 'Un dessert offert' },
+                { at: 800, reward: 'Un menu offert' },
+              ],
+      }),
+    )
+  }
+
+  const updateTier = (index: number, patch: Partial<RewardTier>) => {
+    setDraft(derive({ ...draft, tiers: draft.tiers.map((tier, i) => (i === index ? { ...tier, ...patch } : tier)) }))
+  }
+  const updateTierAt = (index: number, value: string) => {
     const parsed = Number(value)
-    const maximum = draft.type === 'stamps' ? 10 : Number.POSITIVE_INFINITY
-    const target = Math.min(maximum, Math.max(1, Number.isFinite(parsed) ? parsed : 1))
-    setDraft({ ...draft, target, current: Math.min(draft.current, target) })
+    const at = Math.min(maxTierAt, Math.max(1, Number.isFinite(parsed) ? parsed : 1))
+    updateTier(index, { at })
+  }
+  const addTier = () => {
+    const lastAt = draft.tiers[draft.tiers.length - 1]?.at ?? 0
+    const at = Math.min(maxTierAt, isStamps ? lastAt + 2 : lastAt + 200)
+    setDraft(derive({ ...draft, tiers: [...draft.tiers, { at, reward: 'Une récompense offerte' }] }))
+  }
+  const removeTier = (index: number) => {
+    if (draft.tiers.length <= 1) return
+    setDraft(derive({ ...draft, tiers: draft.tiers.filter((_, i) => i !== index) }))
   }
 
   const previewRestaurant: Restaurant = { ...restaurant, loyalty: draft }
+  const menuSuggestions = restaurant.menu.map((item) => `« ${item.name} » offert`)
 
   return (
     <main className="page">
@@ -279,7 +316,7 @@ export function LoyaltyEditorPage({ go, restaurant, draft, setDraft, notify }: C
 
       <Tabs
         values={['À coches', 'À points']}
-        active={draft.type === 'stamps' ? 'À coches' : 'À points'}
+        active={isStamps ? 'À coches' : 'À points'}
         onChange={(value) => setType(value === 'À coches' ? 'stamps' : 'points')}
       />
 
@@ -288,24 +325,116 @@ export function LoyaltyEditorPage({ go, restaurant, draft, setDraft, notify }: C
           Titre du programme
           <input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
         </label>
-        <label>
-          {draft.type === 'stamps' ? 'Nombre de coches (10 maximum)' : 'Objectif de points'}
-          <input
-            type="number"
-            min={1}
-            max={draft.type === 'stamps' ? 10 : undefined}
-            value={draft.target}
-            onChange={(event) => updateTarget(event.target.value)}
-          />
-        </label>
-        <label>
-          Récompense
-          <input value={draft.reward} onChange={(event) => setDraft({ ...draft, reward: event.target.value })} />
-        </label>
-        <label>
-          Conditions de gain
-          <textarea rows={3} value={draft.rule} onChange={(event) => setDraft({ ...draft, rule: event.target.value })} />
-        </label>
+
+        <h3 style={{ margin: '8px 0 0' }}>Comment les clients gagnent</h3>
+        {isStamps ? (
+          <>
+            <label>Attribuer une coche…</label>
+            <div className="chips">
+              <button
+                type="button"
+                className={!draft.eurosPerStamp ? 'selected' : ''}
+                onClick={() => setDraft(derive({ ...draft, eurosPerStamp: 0 }))}
+              >
+                {!draft.eurosPerStamp && <Check size={15} />} à chaque visite
+              </button>
+              <button
+                type="button"
+                className={draft.eurosPerStamp ? 'selected' : ''}
+                onClick={() => setDraft(derive({ ...draft, eurosPerStamp: draft.eurosPerStamp || 15 }))}
+              >
+                {draft.eurosPerStamp ? <Check size={15} /> : null} tous les X € dépensés
+              </button>
+            </div>
+            {!!draft.eurosPerStamp && (
+              <label>
+                Montant en euros pour une coche
+                <input
+                  type="number"
+                  min={1}
+                  value={draft.eurosPerStamp}
+                  onChange={(event) => {
+                    const parsed = Number(event.target.value)
+                    setDraft(derive({ ...draft, eurosPerStamp: Math.max(1, Number.isFinite(parsed) ? parsed : 1) }))
+                  }}
+                />
+              </label>
+            )}
+          </>
+        ) : (
+          <label>
+            Points gagnés par euro dépensé
+            <input
+              type="number"
+              min={1}
+              value={draft.pointsPerEuro ?? 10}
+              onChange={(event) => {
+                const parsed = Number(event.target.value)
+                setDraft(derive({ ...draft, pointsPerEuro: Math.max(1, Number.isFinite(parsed) ? parsed : 1) }))
+              }}
+            />
+          </label>
+        )}
+        <p className="muted" style={{ margin: 0, fontSize: 12.5 }}>
+          Règle affichée aux clients : {draft.rule}
+        </p>
+      </section>
+
+      <section className="form-section">
+        <h3 style={{ margin: 0 }}>Paliers de récompenses</h3>
+        <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+          Chaque palier débloque une récompense{isStamps ? ' (10 coches maximum)' : ''}. Piochez dans votre menu pour
+          des récompenses cohérentes.
+        </p>
+        {draft.tiers.map((tier, index) => (
+          <div className="tier-edit" key={index}>
+            <div className="tier-edit-head">
+              <label style={{ margin: 0 }}>
+                À combien de {unit} ?
+                <input
+                  type="number"
+                  min={1}
+                  max={isStamps ? 10 : undefined}
+                  value={tier.at}
+                  onChange={(event) => updateTierAt(index, event.target.value)}
+                />
+              </label>
+              <button
+                className="place-icon-button"
+                type="button"
+                aria-label={`Retirer le palier ${index + 1}`}
+                disabled={draft.tiers.length <= 1}
+                onClick={() => removeTier(index)}
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+            <label style={{ margin: 0 }}>
+              Récompense du palier
+              <input value={tier.reward} onChange={(event) => updateTier(index, { reward: event.target.value })} />
+            </label>
+            {menuSuggestions.length > 0 && (
+              <div className="chips">
+                {menuSuggestions.map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    className={tier.reward === suggestion ? 'selected' : ''}
+                    onClick={() => updateTier(index, { reward: suggestion })}
+                  >
+                    {tier.reward === suggestion && <Check size={15} />} {suggestion}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+        <button className="outline-button" type="button" onClick={addTier}>
+          <Plus size={16} /> Ajouter un palier
+        </button>
+      </section>
+
+      <section className="form-section">
         <label>Style de carte</label>
         <div className="chips">
           {STYLE_OPTIONS.map(([value, label]) => (

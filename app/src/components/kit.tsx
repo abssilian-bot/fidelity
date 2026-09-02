@@ -93,6 +93,10 @@ export function LoyaltyCard({ restaurant, compact = false }: { restaurant: Resta
   const progress = Math.min(100, Math.round((loyalty.current / loyalty.target) * 100))
   const stampTarget = Math.min(10, Math.max(1, Number(loyalty.target) || 1))
   const stampCurrent = Math.min(stampTarget, Math.max(0, Number(loyalty.current) || 0))
+  const tiers = loyalty.tiers?.length ? loyalty.tiers : [{ at: loyalty.target, reward: loyalty.reward }]
+  const nextTier = tiers.find((tier) => tier.at > loyalty.current) ?? tiers[tiers.length - 1]
+  const allReached = loyalty.current >= loyalty.target
+  const unit = loyalty.type === 'stamps' ? `coche${nextTier.at > 1 ? 's' : ''}` : 'points'
   return (
     <article className={`loyalty-card style-${loyalty.style || 'braise'} ${compact ? 'compact' : ''}`}>
       <header>
@@ -124,8 +128,10 @@ export function LoyaltyCard({ restaurant, compact = false }: { restaurant: Resta
       <p className="card-rule-label">Comment gagner</p>
       <p className="card-rule">{loyalty.rule}</p>
       <p className="card-reward-label">Votre prochaine récompense</p>
-      <strong className="reward-label">{loyalty.reward}</strong>
-      <span className="effort">Encore un petit effort</span>
+      <strong className="reward-label">{allReached ? loyalty.reward : nextTier.reward}</strong>
+      <span className="effort">
+        {allReached ? 'Récompense prête — à retirer en caisse' : `Palier à ${nextTier.at} ${unit}`}
+      </span>
     </article>
   )
 }

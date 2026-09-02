@@ -19,7 +19,10 @@ export function filterRestaurants(items: Restaurant[], filters: SearchFilters): 
       .join(' ')
       .toLocaleLowerCase('fr')
     const restaurantLocation = `${restaurant.district} ${restaurant.address}`.toLocaleLowerCase('fr')
-    const distance = Number.parseFloat(restaurant.distance.replace(',', '.'))
+    const rawDistance = restaurant.distance.replace(',', '.')
+    let distance = Number.parseFloat(rawDistance)
+    // « 800 m » doit être converti en kilomètres avant comparaison
+    if (!Number.isNaN(distance) && !rawDistance.toLowerCase().includes('km')) distance = distance / 1000
     const matchesLocation =
       !location || location === 'paris et alentours' || restaurantLocation.includes(location)
 
@@ -27,19 +30,33 @@ export function filterRestaurants(items: Restaurant[], filters: SearchFilters): 
       (!query || searchableText.includes(query)) &&
       matchesLocation &&
       filters.diets.every((diet) => restaurant.diets.includes(diet)) &&
-      (Number.isNaN(distance) || distance <= filters.distance)
+      (Number.isNaN(distance) || distance <= filters.distance) &&
+      restaurant.maxGuests >= filters.guests &&
+      (!filters.maxPrice || restaurant.avgPrice <= filters.maxPrice)
     )
   })
 }
 
 const DIETS = ['Halal', 'Végétarien', 'Végan']
+const GUEST_OPTIONS = [1, 2, 3, 4, 6, 8]
+const PRICE_OPTIONS: Array<[number, string]> = [
+  [0, 'Peu importe'],
+  [15, '≤ 15 €'],
+  [20, '≤ 20 €'],
+  [30, '≤ 30 €'],
+]
 const DEFAULT_FILTERS: SearchFilters = {
   query: '',
   location: 'Paris et alentours',
-  time: 'Peu importe',
+  times: [],
   diets: [],
   distance: 5,
+  guests: 2,
+  maxPrice: 0,
 }
+
+const timesSummary = (times: string[]) =>
+  times.length === 0 ? 'Peu importe' : times.length === 1 ? times[0] : `${times.length} créneaux · ${times.join(', ')}`
 
 export function SearchPage({ go, goBack, filters, setFilters, restaurants }: CommonProps & {
   filters: SearchFilters
@@ -92,16 +109,54 @@ export function SearchPage({ go, goBack, filters, setFilters, restaurants }: Com
       </section>
 
       <section className="form-section">
-        <h2 style={{ margin: 0 }}>Horaire</h2>
-        <strong style={{ fontSize: 16 }}>{filters.time}</strong>
+        <h2 style={{ margin: 0 }}>Horaires</h2>
+        <strong style={{ fontSize: 16 }}>{timesSummary(filters.times)}</strong>
         <p className="muted" style={{ margin: 0, fontSize: 13.5 }}>
-          Choisissez parmi 13 créneaux de déjeuner et de dîner.
+          Plusieurs créneaux possibles, déjeuner et dîner confondus.
         </p>
         <div>
           <button className="outline-button" type="button" onClick={() => go('time')}>
-            Changer l’horaire
+            Changer les horaires
           </button>
         </div>
+      </section>
+
+      <section className="form-section">
+        <h2 style={{ margin: 0 }}>Nombre de personnes</h2>
+        <div className="chips">
+          {GUEST_OPTIONS.map((guests) => (
+            <button
+              key={guests}
+              type="button"
+              className={filters.guests === guests ? 'selected' : ''}
+              onClick={() => setFilters({ ...filters, guests })}
+            >
+              {filters.guests === guests && <Check size={15} />} {guests} pers.
+            </button>
+          ))}
+        </div>
+        <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+          On ne garde que les tables qui peuvent vous accueillir.
+        </p>
+      </section>
+
+      <section className="form-section">
+        <h2 style={{ margin: 0 }}>Budget par personne</h2>
+        <div className="chips">
+          {PRICE_OPTIONS.map(([price, label]) => (
+            <button
+              key={price}
+              type="button"
+              className={filters.maxPrice === price ? 'selected' : ''}
+              onClick={() => setFilters({ ...filters, maxPrice: price })}
+            >
+              {filters.maxPrice === price && <Check size={15} />} {label}
+            </button>
+          ))}
+        </div>
+        <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+          Prix moyen constaté d’un repas, boissons non comprises.
+        </p>
       </section>
 
       <section className="form-section">
@@ -152,16 +207,22 @@ export function SearchPage({ go, goBack, filters, setFilters, restaurants }: Com
   )
 }
 
-const TIMES = ['Peu importe', 'Maintenant', '12 h', '12 h 30', '13 h', '13 h 30', '18 h 30', '19 h', '19 h 30', '20 h', '20 h 30', '21 h', '21 h 30']
+const TIMES = ['Maintenant', '12 h', '12 h 30', '13 h', '13 h 30', '18 h 30', '19 h', '19 h 30', '20 h', '20 h 30', '21 h', '21 h 30']
 
 export function TimePage({ goBack, filters, setFilters }: CommonProps & {
   filters: SearchFilters
   setFilters: (filters: SearchFilters) => void
 }) {
   const timeLabel = (time: string) => {
-    if (time === 'Peu importe') return 'Voir tous les horaires'
     if (time === 'Maintenant') return 'Ouvert au moment de la recherche'
     return time.includes('12') || time.includes('13') ? 'Déjeuner' : 'Dîner'
+  }
+
+  const toggleTime = (time: string) => {
+    const times = filters.times.includes(time)
+      ? filters.times.filter((item) => item !== time)
+      : [...filters.times, time]
+    setFilters({ ...filters, times })
   }
 
   return (
@@ -172,15 +233,17 @@ export function TimePage({ goBack, filters, setFilters }: CommonProps & {
           <h1 style={{ margin: '6px 0 0' }}>À quelle heure ?</h1>
         </div>
       </div>
-      <p className="lead">Choisissez le moment précis auquel vous voulez arriver au restaurant.</p>
+      <p className="lead">
+        Plusieurs créneaux possibles — touchez pour ajouter ou retirer un horaire. Aucun choix = tous les horaires.
+      </p>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 20 }}>
         {TIMES.map((time) => {
-          const selected = filters.time === time
+          const selected = filters.times.includes(time)
           return (
             <button
               key={time}
               type="button"
-              onClick={() => setFilters({ ...filters, time })}
+              onClick={() => toggleTime(time)}
               style={{
                 display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3,
                 background: selected ? '#fbe9dc' : 'var(--surface)',
@@ -198,7 +261,9 @@ export function TimePage({ goBack, filters, setFilters }: CommonProps & {
         })}
       </div>
       <button className="primary-button full" type="button" style={{ marginTop: 22 }} onClick={goBack}>
-        Choisir {filters.time.toLowerCase()}
+        {filters.times.length
+          ? `Choisir ${filters.times.length === 1 ? filters.times[0].toLowerCase() : `${filters.times.length} créneaux`}`
+          : 'Peu importe l’horaire'}
       </button>
     </main>
   )

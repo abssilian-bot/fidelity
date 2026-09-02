@@ -1,14 +1,37 @@
 export type LoyaltyStyle = 'braise' | 'creme' | 'encre'
 export type LoyaltyType = 'stamps' | 'points'
 
+/** Un palier de récompense : à « at » coches/points, le client débloque « reward ». */
+export interface RewardTier {
+  at: number
+  reward: string
+}
+
 export interface Loyalty {
   type: LoyaltyType
   title: string
   current: number
+  /** Dernier palier (dérivé de `tiers`). */
   target: number
+  /** Récompense du dernier palier (dérivée de `tiers`). */
   reward: string
+  /** Règle de gain lisible, dérivée des réglages ci-dessous. */
   rule: string
+  /** Programme à points : combien de points par euro dépensé. */
+  pointsPerEuro?: number
+  /** Programme à coches : 1 coche tous les X € dépensés. 0 ou absent = une coche par visite. */
+  eurosPerStamp?: number
+  /** Paliers de récompenses, triés par seuil croissant. */
+  tiers: RewardTier[]
   style: LoyaltyStyle
+}
+
+/** Génère la règle de gain lisible à partir des réglages. */
+export function loyaltyRule(loyalty: Pick<Loyalty, 'type' | 'pointsPerEuro' | 'eurosPerStamp'>): string {
+  if (loyalty.type === 'points') return `${loyalty.pointsPerEuro ?? 10} points par euro dépensé.`
+  return loyalty.eurosPerStamp
+    ? `Une coche tous les ${loyalty.eurosPerStamp} € dépensés.`
+    : 'Une coche par visite, hors boissons.'
 }
 
 export interface MenuItem {
@@ -36,6 +59,10 @@ export interface Restaurant {
   hours: string[]
   diets: string[]
   open: boolean
+  /** Prix moyen d'un repas par personne, en euros. */
+  avgPrice: number
+  /** Taille maximale de table acceptée. */
+  maxGuests: number
   loyalty: Loyalty
   menu: MenuItem[]
   reviews: Review[]
@@ -87,6 +114,8 @@ export const restaurants: Restaurant[] = [
     hours: ['Vendredi · 11:30–23:00', 'Samedi · 12:00–23:30'],
     diets: ['Halal', 'Végétarien'],
     open: true,
+    avgPrice: 19,
+    maxGuests: 6,
     loyalty: {
       type: 'stamps',
       title: 'Les saveurs d’Amina',
@@ -94,6 +123,12 @@ export const restaurants: Restaurant[] = [
       target: 10,
       reward: 'Un plat signature offert',
       rule: 'Une coche par visite, hors boissons.',
+      eurosPerStamp: 0,
+      tiers: [
+        { at: 4, reward: 'Des carottes à la chermoula offertes' },
+        { at: 7, reward: 'Un dessert offert' },
+        { at: 10, reward: 'Un plat signature offert' },
+      ],
       style: 'braise',
     },
     menu: [
@@ -119,6 +154,8 @@ export const restaurants: Restaurant[] = [
     hours: ['Vendredi · 12:00–23:00', 'Samedi · 12:00–00:00'],
     diets: ['Végétarien', 'Végan'],
     open: true,
+    avgPrice: 14,
+    maxGuests: 4,
     loyalty: {
       type: 'stamps',
       title: 'La mesa verde',
@@ -126,6 +163,11 @@ export const restaurants: Restaurant[] = [
       target: 8,
       reward: 'Un dessert maison offert',
       rule: 'Une coche par passage.',
+      eurosPerStamp: 0,
+      tiers: [
+        { at: 4, reward: 'Une boisson offerte' },
+        { at: 8, reward: 'Un dessert maison offert' },
+      ],
       style: 'braise',
     },
     menu: [
@@ -149,6 +191,8 @@ export const restaurants: Restaurant[] = [
     hours: ['Vendredi · 18:00–23:00', 'Samedi · 12:00–23:00'],
     diets: ['Végétarien', 'Végan', 'Sans gluten'],
     open: false,
+    avgPrice: 18,
+    maxGuests: 4,
     loyalty: {
       type: 'points',
       title: 'Le cercle Miso',
@@ -156,6 +200,12 @@ export const restaurants: Restaurant[] = [
       target: 800,
       reward: 'Un menu midi offert',
       rule: 'Dix points par euro dépensé.',
+      pointsPerEuro: 10,
+      tiers: [
+        { at: 200, reward: 'Des gyozas de saison offerts' },
+        { at: 400, reward: 'Un donburi aubergine offert' },
+        { at: 800, reward: 'Un menu midi offert' },
+      ],
       style: 'braise',
     },
     menu: [
@@ -180,6 +230,8 @@ export const restaurants: Restaurant[] = [
     hours: ['Tous les jours · 09:00–18:00'],
     diets: ['Végétarien'],
     open: true,
+    avgPrice: 16,
+    maxGuests: 8,
     loyalty: {
       type: 'points',
       title: 'Les matins solaires',
@@ -187,6 +239,12 @@ export const restaurants: Restaurant[] = [
       target: 500,
       reward: 'Un brunch offert',
       rule: 'Cinq points par euro dépensé.',
+      pointsPerEuro: 5,
+      tiers: [
+        { at: 150, reward: 'Un granola maison offert' },
+        { at: 300, reward: 'Un café de spécialité offert' },
+        { at: 500, reward: 'Un brunch offert' },
+      ],
       style: 'creme',
     },
     menu: [
@@ -208,6 +266,8 @@ export const restaurants: Restaurant[] = [
     hours: ['Vendredi · 12:00–22:30', 'Samedi · 12:00–23:00'],
     diets: ['Végétarien', 'Sans gluten'],
     open: false,
+    avgPrice: 15,
+    maxGuests: 6,
     loyalty: {
       type: 'points',
       title: 'Le carnet rouge',
@@ -215,6 +275,12 @@ export const restaurants: Restaurant[] = [
       target: 1000,
       reward: 'Un grand bol au choix offert',
       rule: 'Dix points par euro dépensé.',
+      pointsPerEuro: 10,
+      tiers: [
+        { at: 250, reward: 'Un dessert offert' },
+        { at: 500, reward: 'Un bò bún maison offert' },
+        { at: 1000, reward: 'Un grand bol au choix offert' },
+      ],
       style: 'braise',
     },
     menu: [
@@ -236,6 +302,8 @@ export const restaurants: Restaurant[] = [
     hours: ['Vendredi · 12:00–23:00', 'Samedi · 12:00–23:30'],
     diets: ['Halal', 'Végétarien'],
     open: true,
+    avgPrice: 21,
+    maxGuests: 6,
     loyalty: {
       type: 'stamps',
       title: 'Les braises fidèles',
@@ -243,6 +311,11 @@ export const restaurants: Restaurant[] = [
       target: 6,
       reward: 'Une assiette braisée offerte',
       rule: 'Une coche par passage.',
+      eurosPerStamp: 0,
+      tiers: [
+        { at: 3, reward: 'Une boisson offerte' },
+        { at: 6, reward: 'Une assiette braisée offerte' },
+      ],
       style: 'encre',
     },
     menu: [

@@ -59,7 +59,12 @@ export interface CommonProps {
 export interface SearchFilters {
   query: string
   location: string
-  time: string
+  /** Créneaux horaires choisis — multi-sélection. Vide = peu importe. */
+  times: string[]
   diets: string[]
   distance: number
+  /** Nombre de personnes à table. */
+  guests: number
+  /** Prix moyen maximum par personne, en euros. 0 = peu importe. */
+  maxPrice: number
 }

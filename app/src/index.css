@@ -959,3 +959,38 @@ textarea { resize: vertical; }
 .place-actions button:hover { border-color: var(--orange); color: var(--orange); }
 .place-actions button:disabled { opacity: 0.35; cursor: not-allowed; }
 .place-actions button:disabled:hover { border-color: var(--line); color: var(--ink); }
+
+/* ---------- Paliers de récompenses ---------- */
+.tier-list { display: flex; flex-direction: column; gap: 10px; margin-top: 22px; }
+.tier-list h2 { font-size: 18px; }
+.tier-row {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px;
+}
+.tier-row.reached { border-color: var(--orange); background: #fdf0e5; }
+.tier-row.next { border-color: #d8a24a; }
+.tier-check {
+  width: 24px; height: 24px; border-radius: 999px; border: 2px solid var(--line);
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; color: #fdf3ea;
+}
+.tier-row.reached .tier-check { border-color: var(--orange); background: var(--orange); }
+.tier-row .visit-copy { flex: 1; min-width: 0; }
+.tier-at { flex-shrink: 0; font-size: 12.5px; font-weight: 600; color: var(--muted-soft); }
+.tier-row.reached .tier-at { color: var(--orange); }
+
+/* ---------- Éditeur de paliers (espace restaurateur) ---------- */
+.tier-edit {
+  display: flex; flex-direction: column; gap: 10px;
+  border: 1px solid var(--line); border-radius: 16px; padding: 14px;
+}
+.tier-edit-head { display: flex; align-items: flex-end; gap: 10px; }
+.tier-edit-head label { flex: 1; }
+.place-icon-button {
+  width: 40px; height: 40px; border-radius: 999px; border: 1.5px solid var(--line);
+  background: var(--surface); color: var(--ink); cursor: pointer; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.place-icon-button:hover { border-color: #c8450f; color: #c8450f; }
+.place-icon-button:disabled { opacity: 0.35; cursor: not-allowed; }
+.place-icon-button:disabled:hover { border-color: var(--line); color: var(--ink); }

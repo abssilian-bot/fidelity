@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { BadgeCheck, Bookmark, ChevronRight, Clock3, Heart, MessageCircle, MoreHorizontal, Plus, Search, Send, Store, X } from 'lucide-react'
+import { BadgeCheck, Bookmark, ChevronRight, Clock3, Heart, MessageCircle, Plus, Search, Send, Store, X } from 'lucide-react'
 import { feedPosts, getRestaurant, members, stories } from '../data'
 import type { FeedPost, Restaurant } from '../data'
 import type { CommonProps } from '../nav'
@@ -213,7 +213,6 @@ export function DiscoveryPage({ go, notify, restaurants, sharedPosts = [] }: Com
                 >
                   {isFollowing ? 'Suivi' : 'Suivre'}
                 </button>
-                <MoreHorizontal size={21} strokeWidth={1.6} />
               </header>
               <button className="post-image" type="button" onClick={() => go('restaurant', { restaurantId: post.restaurantId })}>
                 <img src={post.image} alt="" />

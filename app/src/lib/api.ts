@@ -137,7 +137,19 @@ function mergeRestaurant(demo: Restaurant | undefined, api: ApiRestaurant): Rest
       hours: [],
       diets: api.diets,
       open: true,
-      loyalty: { type: 'stamps', title: 'Programme fidélité', current: 0, target: 10, reward: '', rule: '', style: 'braise' },
+      avgPrice: 20,
+      maxGuests: 6,
+      loyalty: {
+        type: 'stamps',
+        title: 'Programme fidélité',
+        current: 0,
+        target: 10,
+        reward: '',
+        rule: '',
+        eurosPerStamp: 0,
+        tiers: [{ at: 10, reward: '' }],
+        style: 'braise',
+      },
       menu: [],
       reviews: [],
     } as Restaurant)
@@ -158,6 +170,11 @@ function mergeRestaurant(demo: Restaurant | undefined, api: ApiRestaurant): Rest
           target: api.program.target,
           reward: api.program.reward,
           rule: api.program.rule,
+          pointsPerEuro: base.loyalty.pointsPerEuro,
+          eurosPerStamp: base.loyalty.eurosPerStamp,
+          tiers: base.loyalty.tiers?.length
+            ? base.loyalty.tiers
+            : [{ at: api.program.target, reward: api.program.reward }],
           style: api.program.style.toLowerCase() as Loyalty['style'],
         }
       : base.loyalty,

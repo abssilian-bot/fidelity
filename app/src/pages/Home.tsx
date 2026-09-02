@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronRight, Search, SlidersHorizontal, Star } from 'lucide-react'
+import { ChevronRight, Search, Star } from 'lucide-react'
 import type { Restaurant } from '../data'
 import type { CommonProps } from '../nav'
 import { HeartButton, MapIllustration, loyaltyTeaser } from '../components/kit'
@@ -56,9 +56,6 @@ export default function HomePage({ go, favorites, toggleFavorite, restaurants, b
       <button className="search-bar" type="button" onClick={() => go('search')}>
         <Search size={20} strokeWidth={1.7} />
         <span>Paris et alentours</span>
-        <span className="filter-circle">
-          <SlidersHorizontal size={18} />
-        </span>
       </button>
       <p className="microcopy">
         {backendConnected ? 'Connecté au serveur · données en temps réel' : 'Aperçu local · serveur hors ligne, données de démonstration'}

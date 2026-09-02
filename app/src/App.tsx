@@ -62,9 +62,11 @@ function App() {
   const [searchFilters, setSearchFilters] = useState<SearchFilters>({
     query: '',
     location: 'Paris et alentours',
-    time: 'Peu importe',
+    times: [],
     diets: [],
     distance: 5,
+    guests: 2,
+    maxPrice: 0,
   })
 
   // Démarrage : on récupère les vraies données du backend (restos + soldes + historique).
@@ -144,7 +146,17 @@ function App() {
             hours: ['Vendredi · 11:30–23:00'],
             diets: [],
             menu: [],
-            loyalty: { type: 'stamps', title: 'Mon programme', current: 0, target: 10, reward: 'Une récompense offerte', rule: 'Une coche par visite.', style: 'braise' },
+            loyalty: {
+              type: 'stamps',
+              title: 'Mon programme',
+              current: 0,
+              target: 10,
+              reward: 'Une récompense offerte',
+              rule: 'Une coche par visite.',
+              eurosPerStamp: 0,
+              tiers: [{ at: 10, reward: 'Une récompense offerte' }],
+              style: 'braise',
+            },
             reviews: [],
           }
     setCustomRestaurants((current) => ({ ...current, [id]: created }))
