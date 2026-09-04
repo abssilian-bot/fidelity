@@ -11,6 +11,7 @@ import { authRoutes } from './routes/auth.js'
 import { restaurantRoutes } from './routes/restaurants.js'
 import { membershipRoutes } from './routes/memberships.js'
 import { ledgerRoutes } from './routes/ledger.js'
+import { shareRoutes } from './routes/shares.js'
 
 const prisma = new PrismaClient()
 const app = Fastify({ logger: true, trustProxy: true })
@@ -18,7 +19,7 @@ const app = Fastify({ logger: true, trustProxy: true })
 // CORS : uniquement les fronts autorisés (dev local par défaut, prod via env)
 const allowedOrigins = (
   process.env.ALLOWED_ORIGINS ??
-  'http://localhost:3000,http://localhost:5173,http://localhost:5174'
+  'http://localhost:3000,http://localhost:5173,http://localhost:5174,http://localhost:7100,http://127.0.0.1:7100'
 )
   .split(',')
   .map((o) => o.trim())
@@ -40,6 +41,7 @@ authRoutes(app, prisma)
 restaurantRoutes(app, prisma)
 membershipRoutes(app, prisma)
 ledgerRoutes(app, prisma)
+shareRoutes(app, prisma)
 
 // Front statique : sert l'app React compilée quand elle existe.
 // Deux emplacements possibles, le premier trouvé gagne :

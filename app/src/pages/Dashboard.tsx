@@ -273,8 +273,10 @@ export function RestoFoodsharePage({ restaurant, notify, sharedPosts = [], decid
                       className="primary-button share-validate"
                       type="button"
                       onClick={() => {
-                        decideShare?.(share.id, true)
-                        notify(`Partage republié · ${creditLabel} crédité${reward > 1 && isStamps ? 's' : ''} pour ${share.author} (démo)`)
+                        decideShare?.(share.id, true, reward)
+                        notify(
+                          `Partage republié · ${creditLabel} crédité${reward > 1 && isStamps ? 's' : ''} pour ${share.author}${share.backendId ? '' : ' (démo)'}`,
+                        )
                       }}
                     >
                       <Check size={16} strokeWidth={2.5} /> Republier · {creditLabel}

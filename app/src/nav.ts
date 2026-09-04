@@ -1,7 +1,7 @@
 import type { Restaurant, SharedPost, UserReview } from './data'
 
 export type ShareStatus = 'pending' | 'published' | 'rejected'
-export type Share = SharedPost & { status: ShareStatus }
+export type Share = SharedPost & { status: ShareStatus; backendId?: string }
 
 export type RouteName =
   | 'home'
@@ -51,8 +51,8 @@ export interface CommonProps {
   notify: (message: string) => void
   switchRole?: (role: AppRole) => void
   sharedPosts?: Share[]
-  publishShare?: (input: { restaurantId: string; image: string; caption: string; rating: number }) => void
-  decideShare?: (id: number, publish: boolean) => void
+  publishShare?: (input: { restaurantId: string; image: string; caption: string; rating: number }) => Promise<boolean> | void
+  decideShare?: (id: number, publish: boolean, rewardDelta?: number) => void
   myReviews?: UserReview[]
 }
 

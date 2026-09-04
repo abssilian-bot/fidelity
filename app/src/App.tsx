@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Compass, CreditCard, Home, LayoutDashboard, Settings, Share2, Store } from 'lucide-react'
 import { getRestaurant, pendingSharesSeed, restaurants as demoRestaurants, setHistoryItems, setProgramClients, setRecentScans, userReviews } from './data'
 import type { Loyalty, MenuItem, Restaurant, UserReview } from './data'
-import { bootstrapBackend, fetchClients, fetchHistory } from './lib/api'
+import { bootstrapBackend, decideShareApi, fetchClients, fetchHistory, fetchMyShares, fetchPendingShares, publishShareApi } from './lib/api'
 import type { BackendState } from './lib/api'
 import type { AppRole, CommonProps, Route, RouteName, SearchFilters, Share } from './nav'
 import { BackButton } from './components/kit'
@@ -78,6 +78,15 @@ function App() {
       setBackend(state)
       const history = await fetchHistory()
       if (!cancelled && history.length) setHistoryItems(history)
+      // FoodShare : les partages réels du membre (en attente, publiés, refusés)
+      const mineShares = await fetchMyShares()
+      if (!cancelled && mineShares?.length) {
+        setSharedPosts((current) => {
+          const known = new Set(current.map((share) => share.backendId).filter(Boolean))
+          const fresh = mineShares.filter((share) => !known.has(share.backendId))
+          return fresh.length ? [...fresh, ...current] : current
+        })
+      }
     })
     return () => {
       cancelled = true
@@ -98,6 +107,19 @@ function App() {
       setProgramClients(data.clients)
       setRecentScans(data.scans)
       setClientsVersion((version) => version + 1) // force le rafraîchissement des écrans
+    })
+  }, [backend, role, activeRestoId])
+
+  // Espace restaurateur : file FoodShare réelle (partages en attente de validation)
+  useEffect(() => {
+    if (!backend?.connected || role !== 'restaurant') return
+    fetchPendingShares(activeRestoId).then((shares) => {
+      if (!shares?.length) return
+      setSharedPosts((current) => {
+        const known = new Set(current.map((share) => share.backendId).filter(Boolean))
+        const fresh = shares.filter((share) => !known.has(share.backendId))
+        return fresh.length ? [...fresh, ...current] : current
+      })
     })
   }, [backend, role, activeRestoId])
 
@@ -175,7 +197,34 @@ function App() {
   )
   const [myReviews, setMyReviews] = useState<UserReview[]>(userReviews)
 
-  const publishShare = (input: { restaurantId: string; image: string; caption: string; rating: number }) => {
+  const publishShare = async (input: { restaurantId: string; image: string; caption: string; rating: number }): Promise<boolean> => {
+    // Backend branché : la note compte tout de suite (avis), la photo part en attente.
+    const addLocalReview = () =>
+      setMyReviews((current) => [
+        {
+          id: Date.now(),
+          restaurantId: input.restaurantId,
+          rating: `${input.rating}/5`,
+          date: '31 juil. 2026',
+          text: input.caption || 'Visite partagée via FoodShare.',
+        },
+        ...current,
+      ])
+
+    if (backend?.connected) {
+      const result = await publishShareApi(input.restaurantId, input)
+      if (result === 'forbidden') {
+        setToast('FoodShare disponible après votre première commande dans ce restaurant')
+        return false
+      }
+      if (result) {
+        setSharedPosts((current) => [result, ...current.filter((share) => share.backendId !== result.backendId)])
+        addLocalReview()
+        return true
+      }
+      // null → API injoignable malgré le bootstrap : repli démo ci-dessous
+    }
+
     setSharedPosts((current) => [
       {
         id: Date.now(),
@@ -190,22 +239,21 @@ function App() {
       },
       ...current,
     ])
-    setMyReviews((current) => [
-      {
-        id: Date.now(),
-        restaurantId: input.restaurantId,
-        rating: `${input.rating}/5`,
-        date: '31 juil. 2026',
-        text: input.caption || 'Visite partagée via FoodShare.',
-      },
-      ...current,
-    ])
+    addLocalReview()
+    return true
   }
 
-  const decideShare = (id: number, publish: boolean) => {
+  const decideShare = (id: number, publish: boolean, rewardDelta = 1) => {
+    const target = sharedPosts.find((share) => share.id === id)
     setSharedPosts((current) =>
       current.map((share) => (share.id === id ? { ...share, status: publish ? ('published' as const) : ('rejected' as const) } : share)),
     )
+    // Partage réel → la décision (et le crédit ledger) part au serveur
+    if (target?.backendId) {
+      decideShareApi(target.backendId, publish, rewardDelta).then((ok) => {
+        if (!ok) setToast('Décision enregistrée localement — le serveur est injoignable')
+      })
+    }
   }
 
   // Établissements : suppression en deux temps (archivé → suppression définitive)

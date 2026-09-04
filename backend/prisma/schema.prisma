@@ -49,6 +49,12 @@ enum EntryStatus {
   REVERSED      // annulée par une écriture compensatrice
 }
 
+enum PostStatus {
+  PENDING       // FoodShare en attente de validation restaurateur
+  PUBLISHED     // visible dans le fil public / la page du restaurant
+  REJECTED      // refusé — visible uniquement sur le profil de l'auteur
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
@@ -194,11 +200,15 @@ model Post {
   taggedRestaurantId String?     // FOODSHARE : restaurant identifié par un membre
   imageUrl           String
   caption            String      @default("")
+  rating             Int?        // FOODSHARE : note 1..5 laissée par le membre
+  status             PostStatus  @default(PUBLISHED) // posts restaurant : publiés direct ; foodshare : PENDING
   sponsored          Boolean     @default(false)
   createdAt          DateTime    @default(now())
 
   likes    Like[]
   comments Comment[]
+
+  @@index([taggedRestaurantId, status])
 }
 
 model Like {

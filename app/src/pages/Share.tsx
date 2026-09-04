@@ -11,8 +11,9 @@ export function FoodshareComposePage({ goBack, restaurant, notify, publishShare 
   const [caption, setCaption] = useState('')
   const [photo, setPhoto] = useState(restaurant.image || PHOTO_CHOICES[0])
 
-  const publish = () => {
-    publishShare?.({ restaurantId: restaurant.id, image: photo, caption: caption.trim(), rating })
+  const publish = async () => {
+    const ok = await publishShare?.({ restaurantId: restaurant.id, image: photo, caption: caption.trim(), rating })
+    if (ok === false) return // refus backend (aucune commande) — le toast explicatif est déjà affiché
     notify('Avis publié ! La photo apparaîtra dans le fil dès que le restaurant l’aura republiée.')
     goBack()
   }

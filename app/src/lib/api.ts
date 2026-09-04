@@ -1,4 +1,5 @@
 import type { HistoryItem, Loyalty, ProgramClient, Restaurant, ScanEvent } from '../data'
+import type { Share } from '../nav'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pont entre le front et l'API Fidelity (backend/).
@@ -386,6 +387,122 @@ export async function publishProgram(frontId: string, loyalty: Loyalty): Promise
         style: loyalty.style.toUpperCase(),
         active: true,
       },
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
+// ---------- FoodShare ----------
+
+const ID_TO_SLUG: Record<string, string> = Object.fromEntries(
+  Object.entries(SLUG_TO_ID).map(([slug, id]) => [id, slug]),
+)
+
+interface ApiShare {
+  id: string
+  imageUrl: string
+  caption: string
+  rating: number | null
+  status: 'PENDING' | 'PUBLISHED' | 'REJECTED'
+  createdAt: string
+  author?: { displayName?: string; pseudo?: string; avatarUrl?: string } | null
+  restaurant?: { id: string; name: string; slug: string } | null
+}
+
+/** Id numérique stable dérivé du cuid backend (clés React côté front). */
+const numericId = (backendId: string) => {
+  let hash = 0
+  for (const char of backendId) hash = (hash * 31 + char.charCodeAt(0)) | 0
+  return Math.abs(hash) || 1
+}
+
+const initialsOf = (name: string) =>
+  name
+    .split(' ')
+    .map((word) => word[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
+
+function mapShare(post: ApiShare, restaurantId: string): Share {
+  const author = post.author?.displayName ?? post.author?.pseudo ?? 'Membre'
+  return {
+    id: numericId(post.id),
+    backendId: post.id,
+    restaurantId,
+    author,
+    initials: initialsOf(author),
+    image: post.imageUrl,
+    caption: post.caption,
+    rating: post.rating ?? 5,
+    time: relativeTime(post.createdAt),
+    status: post.status.toLowerCase() as Share['status'],
+  }
+}
+
+/**
+ * Le membre publie un FoodShare (photo + note + commentaire).
+ * Renvoie le partage créé, 'forbidden' si aucune commande chez ce restaurant,
+ * null si l'API est injoignable (repli démo côté appelant).
+ */
+export async function publishShareApi(
+  frontId: string,
+  input: { image: string; caption: string; rating: number },
+): Promise<Share | 'forbidden' | null> {
+  const slug = ID_TO_SLUG[frontId]
+  if (!slug || !backendState.connected) return null
+  try {
+    await ensureSession('member')
+    const post = await apiCall<ApiShare>('POST', '/shares', {
+      role: 'member',
+      body: { slug, imageUrl: input.image, caption: input.caption, rating: input.rating },
+    })
+    return mapShare(post, frontId)
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('première commande')) return 'forbidden'
+    return null
+  }
+}
+
+/** Partages du membre connecté (tous statuts) — visibles sur son profil. */
+export async function fetchMyShares(): Promise<Share[] | null> {
+  if (!backendState.connected) return null
+  try {
+    await ensureSession('member')
+    const posts = await apiCall<ApiShare[]>('GET', '/shares/mine', { role: 'member' })
+    return posts.map((post) => {
+      const slug = post.restaurant?.slug ?? ''
+      return mapShare(post, SLUG_TO_ID[slug] ?? slug)
+    })
+  } catch {
+    return null
+  }
+}
+
+/** File de validation FoodShare du restaurateur pour un établissement. */
+export async function fetchPendingShares(frontId: string): Promise<Share[] | null> {
+  const backendId = backendState.backendIds[frontId]
+  if (!backendId) return null
+  try {
+    await ensureSession('restaurant')
+    const posts = await apiCall<ApiShare[]>('GET', `/restaurants/${backendId}/shares?status=PENDING`, {
+      role: 'restaurant',
+    })
+    return posts.map((post) => mapShare(post, frontId))
+  } catch {
+    return null
+  }
+}
+
+/** Décision du restaurateur : republier (crédit ledger) ou refuser. */
+export async function decideShareApi(shareBackendId: string, publish: boolean, rewardDelta: number): Promise<boolean> {
+  try {
+    await ensureSession('restaurant')
+    await apiCall('POST', `/shares/${shareBackendId}/decide`, {
+      role: 'restaurant',
+      body: { publish, rewardDelta },
     })
     return true
   } catch {

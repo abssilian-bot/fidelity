@@ -35,9 +35,9 @@ const adjustSchema = z.object({
 
 class InsufficientBalance extends Error {}
 
-async function writeEntry(
+export async function writeEntry(
   prisma: PrismaClient,
-  input: { membershipId: string; delta: number; kind: 'EARN' | 'REDEEM' | 'ADJUST' | 'REFUND'; source: string; idempotencyKey: string; authorId: string; note?: string },
+  input: { membershipId: string; delta: number; kind: 'EARN' | 'REDEEM' | 'ADJUST' | 'REFUND' | 'FOODSHARE'; source: string; idempotencyKey: string; authorId: string; note?: string },
 ) {
   return prisma.$transaction(async (tx) => {
     const last = await tx.ledgerEntry.findFirst({
@@ -152,7 +152,7 @@ export function ledgerRoutes(app: FastifyInstance, prisma: PrismaClient) {
 }
 
 // Un rejeu (même idempotencyKey) renvoie l'écriture initiale — jamais de doublon
-async function handleLedgerError(reply: FastifyReply, error: unknown, prisma: PrismaClient, idempotencyKey: string) {
+export async function handleLedgerError(reply: FastifyReply, error: unknown, prisma: PrismaClient, idempotencyKey: string) {
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
     const existing = await prisma.ledgerEntry.findUnique({
       where: { idempotencyKey },

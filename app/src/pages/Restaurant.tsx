@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Check, Clock3, CreditCard, Gift, Heart, Info, MapPin, Navigation, Share2, Star } from 'lucide-react'
 import type { Restaurant } from '../data'
+import { userVisits } from '../data'
 import type { CommonProps } from '../nav'
 import { HeartButton, LoyaltyCard, Tabs } from '../components/kit'
 
@@ -168,6 +169,9 @@ export function CardDetailPage({ go, restaurant }: CommonProps & { restaurant: R
   const remaining = Math.max(0, nextTier.at - loyalty.current)
   const unit = loyalty.type === 'stamps' ? `coche${remaining > 1 ? 's' : ''}` : 'points'
   const unitPlural = loyalty.type === 'stamps' ? 'coches' : 'points'
+  // FoodShare réservé aux membres ayant déjà commandé (visite enregistrée ou solde réel)
+  const hasOrdered =
+    loyalty.current > 0 || userVisits.some((visit) => visit.restaurantId === restaurant.id && visit.count > 0)
 
   return (
     <main className="page">
@@ -241,13 +245,19 @@ export function CardDetailPage({ go, restaurant }: CommonProps & { restaurant: R
         </div>
       </section>
       <button
-        className="primary-button full"
+        className="outline-button full"
         type="button"
         style={{ marginTop: 14 }}
+        disabled={!hasOrdered}
         onClick={() => go('foodshareCompose', { restaurantId: restaurant.id })}
       >
-        <Share2 size={18} /> Partager ma visite
+        <Share2 size={18} /> Publier un FoodShare
       </button>
+      {!hasOrdered && (
+        <p className="muted" style={{ margin: '8px 0 0', fontSize: 13, textAlign: 'center' }}>
+          Partage disponible après votre première commande — présentez votre carte en caisse.
+        </p>
+      )}
     </main>
   )
 }
