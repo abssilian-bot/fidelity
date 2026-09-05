@@ -7,8 +7,8 @@ services:
     rootDir: backend
     plan: free
     # Compile d'abord l'app React (app/dist), puis l'API qui la sert
-    buildCommand: cd ../app && npm install && npm run build && cd ../backend && npm install && npm run build
-    startCommand: npm start
+    buildCommand: npm ci --include=dev && npm run build:render
+    startCommand: npm run start:render
     healthCheckPath: /health
     envVars:
       - key: DATABASE_URL

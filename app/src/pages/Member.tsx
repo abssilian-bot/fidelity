@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BadgeCheck, ChevronRight, Star, Trash2, UserPlus, UtensilsCrossed } from 'lucide-react'
 import { getMember, userReviews, userVisits } from '../data'
 import type { Member, UserReview, Visit } from '../data'
 import type { CommonProps } from '../nav'
 import { Tabs } from '../components/kit'
+import { fetchPublicMember } from '../lib/api'
 
 interface MemberData {
   name: string
@@ -16,6 +17,7 @@ interface MemberData {
 function useMemberData(memberId: string | undefined, favorites: Set<string>, selfReviews?: UserReview[]): MemberData {
   if (memberId) {
     const member = getMember(memberId)
+    if (!member) return { name: 'Profil introuvable', isSelf: false, likedIds: [], visits: [], reviews: [] }
     return {
       name: member.name,
       isSelf: false,
@@ -169,9 +171,23 @@ export function MyReviewsPage({ go, favorites, resolveRestaurant, memberId, myRe
 
 /** Profil public d'un membre — même présentation que notre propre profil. */
 export function MemberProfilePage({ go, memberId }: CommonProps & { memberId?: string }) {
-  const member: Member = getMember(memberId || 'camille')
+  const cachedMember = getMember(memberId || 'camille')
+  const [remote, setRemote] = useState<Member | null>(null)
+  const [failed, setFailed] = useState(false)
   const [following, setFollowing] = useState(false)
   const [activeTab, setActiveTab] = useState('Publications')
+  useEffect(() => {
+    if (cachedMember?.source !== 'server' || !memberId) return
+    const controller = new AbortController()
+    fetchPublicMember(memberId, controller.signal).then((member) => {
+      if (controller.signal.aborted) return
+      if (member) setRemote(member)
+      else setFailed(true)
+    })
+    return () => controller.abort()
+  }, [memberId, cachedMember?.source])
+  const member = remote?.id === memberId ? remote : cachedMember
+  if (!member) return <main className="page"><h1>Profil introuvable</h1><p>Ce profil n’est plus disponible.</p></main>
 
   return (
     <main className="page">
@@ -197,15 +213,15 @@ export function MemberProfilePage({ go, memberId }: CommonProps & { memberId?: s
         </div>
         <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.55 }}>{member.bio}</p>
 
-        <button
+        {member.source !== 'server' && <button
           className={following ? 'outline-button full' : 'primary-button full'}
           type="button"
           onClick={() => setFollowing(!following)}
         >
           <UserPlus size={18} /> {following ? `Vous suivez ${member.name.split(' ')[0]}` : `Suivre ${member.name.split(' ')[0]}`}
-        </button>
+        </button>}
 
-        <div className="profile-stats four">
+        {member.source !== 'server' ? <div className="profile-stats four">
           <span>
             <strong>{member.posts}</strong> publications
           </span>
@@ -218,7 +234,9 @@ export function MemberProfilePage({ go, memberId }: CommonProps & { memberId?: s
           <button type="button" onClick={() => go('myReviews', { memberId: member.id })}>
             <strong>{member.reviews}</strong> avis
           </button>
-        </div>
+        </div> : failed ? <p className="muted">Impossible de charger les publications pour le moment.</p>
+          : !remote ? <p role="status" className="muted">Chargement du profil…</p>
+          : <p className="muted">{member.posts} publications publiques · {member.reviews} avis</p>}
 
         <Tabs values={['Publications', 'À propos']} active={activeTab} onChange={setActiveTab} />
         {activeTab === 'Publications' ? (
@@ -229,8 +247,7 @@ export function MemberProfilePage({ go, memberId }: CommonProps & { memberId?: s
           </div>
         ) : (
           <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.55 }}>
-            {member.bio} Membre Fidelity actif — {member.visits} visites, {member.reviews} avis déposés et{' '}
-            {member.liked} tables en coups de cœur.
+            {member.bio || 'Cette personne n’a pas encore ajouté de présentation.'}
           </p>
         )}
       </section>

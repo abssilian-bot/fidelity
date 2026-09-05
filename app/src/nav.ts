@@ -49,6 +49,12 @@ export interface CommonProps {
   toggleFavorite: (id: string) => void
   resolveRestaurant: (id: string) => Restaurant
   notify: (message: string) => void
+  hasCard: (restaurantId: string) => boolean
+  addCard: (restaurantId: string) => Promise<void>
+  isAddingCard: (restaurantId: string) => boolean
+  cardsLoading: boolean
+  cardsUnavailable: boolean
+  reloadCards: () => Promise<void>
   switchRole?: (role: AppRole) => void
   sharedPosts?: Share[]
   publishShare?: (input: { restaurantId: string; image: string; caption: string; rating: number }) => Promise<boolean> | void
@@ -62,9 +68,12 @@ export interface SearchFilters {
   /** Créneaux horaires choisis — multi-sélection. Vide = peu importe. */
   times: string[]
   diets: string[]
+  categories: string[]
+  services: string[]
   distance: number
   /** Nombre de personnes à table. */
   guests: number
   /** Prix moyen maximum par personne, en euros. 0 = peu importe. */
   maxPrice: number
+  sort: 'relevance' | 'distance' | 'price'
 }

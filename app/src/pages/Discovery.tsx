@@ -1,8 +1,14 @@
-import { useState } from 'react'
-import { BadgeCheck, Bookmark, ChevronRight, Clock3, Heart, MessageCircle, Plus, Search, Send, Store, X } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { BadgeCheck, Bookmark, ChevronRight, Clock3, Heart, MessageCircle, Plus, Send, Store, X } from 'lucide-react'
 import { feedPosts, getRestaurant, members, stories } from '../data'
 import type { FeedPost, Restaurant } from '../data'
-import type { CommonProps } from '../nav'
+import type { CommonProps, SearchFilters } from '../nav'
+import { QuickFilters, SearchBox } from '../components/SearchControls'
+import { SearchFacets } from './Search'
+import { activeFilterCount, defaultSearchFilters, normalizeSearch, searchMembers } from '../lib/search'
+import { useRestaurantSearch } from '../hooks/use-search'
+import { useMemberSearch } from '../hooks/use-member-search'
+import { getBackendState } from '../lib/api'
 
 const DISCOVERY_TABS = ['Pour vous', 'Nouveautés', 'Proximité']
 
@@ -18,29 +24,39 @@ const shareToFeedPost = (share: { id: number; restaurantId: string; author: stri
   time: share.time,
 })
 
-export function DiscoveryPage({ go, notify, restaurants, sharedPosts = [] }: CommonProps & { restaurants: Restaurant[] }) {
+export function DiscoveryPage({ go, notify, restaurants, sharedPosts = [], filters, setFilters, scope, setScope }: CommonProps & {
+  restaurants: Restaurant[]; filters: SearchFilters; setFilters: (filters: SearchFilters) => void
+  scope: 'all' | 'restaurants' | 'members'; setScope: (scope: 'all' | 'restaurants' | 'members') => void
+}) {
   const [activeTab, setActiveTab] = useState('Pour vous')
   const [likedPosts, setLikedPosts] = useState<Set<number>>(new Set([1]))
   const [savedPosts, setSavedPosts] = useState<Set<number>>(new Set())
   const [followed, setFollowed] = useState<Set<string>>(new Set(['casa']))
   const [noticeVisible, setNoticeVisible] = useState(true)
-  const [query, setQuery] = useState('')
+  const [showFilters, setShowFilters] = useState(false)
+  const query = filters.query
 
-  const normalizedQuery = query.trim().toLowerCase()
-  const matchedMembers = normalizedQuery
-    ? members.filter(
-        (member) =>
-          member.name.toLowerCase().includes(normalizedQuery) || member.handle.toLowerCase().includes(normalizedQuery),
-      )
-    : []
-  const matchedRestaurants = normalizedQuery
-    ? restaurants.filter(
-        (restaurant) =>
-          restaurant.name.toLowerCase().includes(normalizedQuery) ||
-          restaurant.cuisine.toLowerCase().includes(normalizedQuery) ||
-          restaurant.district.toLowerCase().includes(normalizedQuery),
-      )
-    : []
+  const normalizedQuery = normalizeSearch(query)
+  const handleSearch = query.trim().startsWith('@')
+  const localMembers = useMemo(() => normalizedQuery
+    ? searchMembers(members, query).map((hit) => hit.item)
+    : scope === 'members' ? members : [], [query, normalizedQuery, scope])
+  const matchedRestaurants = useRestaurantSearch(restaurants, filters)
+  const hasFilters = activeFilterCount(filters) > 0
+  const searching = !!query.trim() || hasFilters || scope !== 'all'
+  const showMembers = handleSearch || (scope !== 'restaurants' && !hasFilters)
+  const showRestaurants = !handleSearch && scope !== 'members'
+  const online = getBackendState().connected
+  const remoteMembers = useMemberSearch(query, online && showMembers)
+  const matchedMembers = online ? remoteMembers.items : localMembers
+  const changeFilters = (next: SearchFilters) => { setFilters(next); setScope('restaurants') }
+  const changeScope = (next: 'all' | 'restaurants' | 'members') => {
+    setScope(next)
+    setShowFilters(false)
+    const nextQuery = next !== 'members' && handleSearch ? query.replace(/^\s*@/, '') : query
+    if (next === 'members' || next === 'all') setFilters({ ...defaultSearchFilters(), query: nextQuery })
+    else setFilters({ ...filters, query: nextQuery })
+  }
 
   const toggleNumber = (setter: React.Dispatch<React.SetStateAction<Set<number>>>, value: number) => {
     setter((current) => {
@@ -75,69 +91,52 @@ export function DiscoveryPage({ go, notify, restaurants, sharedPosts = [] }: Com
         <span className="titlebar-spacer" aria-hidden="true" />
       </div>
 
-      <label className="search-input">
-        <Search size={18} strokeWidth={1.8} />
-        <input
-          type="search"
-          placeholder="Rechercher un membre, une table…"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-        {query && (
-          <button type="button" aria-label="Effacer la recherche" onClick={() => setQuery('')}>
-            <X size={16} />
-          </button>
+      <SearchBox label="Rechercher dans Discovery" placeholder="Une table, une cuisine, @pseudo…"
+        value={query} onChange={(query) => setFilters({ ...filters, query })}
+        onFilters={scope !== 'members' && !handleSearch ? () => setShowFilters(!showFilters) : undefined}
+        filterCount={activeFilterCount(filters)} />
+      {scope !== 'members' && !handleSearch && <QuickFilters filters={filters} onChange={changeFilters} />}
+      <div className="search-scopes" role="group" aria-label="Type de résultats">
+        {([['all', 'Tout'], ['restaurants', 'Tables'], ['members', 'Personnes']] as const).map(([value, label]) =>
+          <button type="button" key={value} aria-pressed={handleSearch ? value === 'members' : scope === value}
+            className={(handleSearch ? value === 'members' : scope === value) ? 'active' : ''}
+            onClick={() => changeScope(value)}>{label}</button>
         )}
-      </label>
+      </div>
+      {showFilters && <section className="discovery-filter-panel" aria-label="Filtres des tables">
+        <SearchFacets filters={filters} setFilters={changeFilters} />
+        <button className="outline-button full" type="button" onClick={() => setShowFilters(false)}>Voir les tables</button>
+      </section>}
 
-      {normalizedQuery ? (
+      {searching ? (
         <section className="search-results">
-          <h2 style={{ margin: 0 }}>Personnes</h2>
-          {matchedMembers.length ? (
-            matchedMembers.map((member) => (
-              <button className="settings-row" key={member.id} type="button" onClick={() => go('memberProfile', { memberId: member.id })}>
-                <span className="member-avatar">{member.initials}</span>
-                <span>
-                  <strong style={{ fontSize: 14.5 }}>{member.name}</strong>
-                  <small>
-                    {member.handle} · {member.visits} visites · {member.reviews} avis
-                  </small>
-                </span>
-                <ChevronRight size={18} color="var(--muted-soft)" />
-              </button>
-            ))
-          ) : (
-            <p className="muted" style={{ margin: 0, fontSize: 13.5 }}>
-              Aucun membre ne correspond à « {query} ».
-            </p>
-          )}
-
-          <h2 style={{ margin: '14px 0 0' }}>Tables</h2>
-          {matchedRestaurants.length ? (
-            matchedRestaurants.map((restaurant) => (
-              <button
-                className="settings-row"
-                key={restaurant.id}
-                type="button"
-                onClick={() => go('restaurant', { restaurantId: restaurant.id })}
-              >
-                <span>
-                  <Store size={18} />
-                </span>
-                <span>
-                  <strong style={{ fontSize: 14.5 }}>{restaurant.name}</strong>
-                  <small>
-                    {restaurant.cuisine} · {restaurant.district}
-                  </small>
-                </span>
-                <ChevronRight size={18} color="var(--muted-soft)" />
-              </button>
-            ))
-          ) : (
-            <p className="muted" style={{ margin: 0, fontSize: 13.5 }}>
-              Aucune table ne correspond à « {query} ».
-            </p>
-          )}
+          <div className="search-summary">
+            <p role="status">{(showMembers ? matchedMembers.length : 0) + (showRestaurants ? matchedRestaurants.length : 0)} résultat(s)</p>
+            <button type="button" className="text-link" onClick={() => { setFilters(defaultSearchFilters()); setScope('all'); setShowFilters(false) }}>Tout effacer</button>
+          </div>
+          {showMembers && <>
+          <h2>Personnes</h2>
+          {online && remoteMembers.loading ? <p role="status" className="search-help muted">Recherche des personnes…</p>
+          : online && remoteMembers.error ? <div><p className="search-help muted">La recherche de personnes est momentanément indisponible.</p><button className="text-link" type="button" onClick={remoteMembers.retry}>Réessayer</button></div>
+          : online && !remoteMembers.eligible ? <p className="search-help muted">Saisissez au moins 2 caractères du nom ou du pseudo.</p>
+          : matchedMembers.length ? matchedMembers.map((member) => (
+            <button className="settings-row" key={member.id} type="button" onClick={() => go('memberProfile', { memberId: member.id })}>
+              <span className="member-avatar">{member.initials}</span>
+              <span><strong>{member.name}</strong><small>{member.handle}</small></span>
+              <ChevronRight size={18} color="var(--muted-soft)" />
+            </button>
+          )) : <p className="search-help muted">Aucune personne trouvée. Essayez son nom ou son @pseudo.</p>}
+          </>}
+          {showRestaurants && <>
+          <h2>Tables</h2>
+          {matchedRestaurants.length ? matchedRestaurants.map((restaurant) => (
+            <button className="settings-row" key={restaurant.id} type="button" onClick={() => go('restaurant', { restaurantId: restaurant.id })}>
+              <span><Store size={18} /></span>
+              <span><strong>{restaurant.name}</strong><small>{restaurant.cuisine} · {restaurant.district}</small></span>
+              <ChevronRight size={18} color="var(--muted-soft)" />
+            </button>
+          )) : <p className="search-help muted">Aucune table trouvée. Essayez un autre plat ou retirez un filtre.</p>}
+          </>}
         </section>
       ) : (
         <>

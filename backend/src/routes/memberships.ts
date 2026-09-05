@@ -7,16 +7,20 @@ export function membershipRoutes(app: FastifyInstance, prisma: PrismaClient) {
   // Adhésion via le QR public du restaurant (/r/:slug côté front)
   app.post('/memberships', { preHandler: app.authenticate }, async (req, reply) => {
     const { slug } = z.object({ slug: z.string().min(1).max(120).regex(/^[a-z0-9-]+$/) }).parse(req.body)
-    const restaurant = await prisma.restaurant.findFirst({ where: { slug, status: 'VERIFIED' } })
+    const restaurant = await prisma.restaurant.findFirst({ where: { slug, status: 'VERIFIED' }, select: { id: true, program: { select: { active: true } } } })
     if (!restaurant) return reply.code(404).send({ error: 'Restaurant introuvable.' })
+    if (!restaurant.program?.active) return reply.code(409).send({ error: 'Ce programme de fidélité n’est pas disponible actuellement.' })
 
     const membership = await prisma.membership.upsert({
       where: { userId_restaurantId: { userId: req.userId, restaurantId: restaurant.id } },
       update: {},
       create: { userId: req.userId, restaurantId: restaurant.id, publicCode: randomCode(16) },
-      select: { id: true, publicCode: true, createdAt: true, restaurant: { select: { name: true, slug: true } } },
+      select: { id: true, publicCode: true, createdAt: true, restaurant: { select: { name: true, slug: true } },
+        entries: { where: { status: 'CONFIRMED' }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 1, select: { balanceAfter: true } },
+      },
     })
-    return reply.code(201).send(membership)
+    const { entries, ...card } = membership
+    return reply.code(201).send({ ...card, balance: entries[0]?.balanceAfter ?? 0 })
   })
 
   // « Mes cartes » : adhésions + solde dérivé du ledger (dernier balanceAfter)
@@ -32,7 +36,7 @@ export function membershipRoutes(app: FastifyInstance, prisma: PrismaClient) {
             program: { select: { type: true, title: true, target: true, reward: true, rule: true, style: true } },
           },
         },
-        entries: { orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 1, select: { balanceAfter: true } },
+        entries: { where: { status: 'CONFIRMED' }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 1, select: { balanceAfter: true } },
       },
     })
     return memberships.map(({ entries, ...m }) => ({

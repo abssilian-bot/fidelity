@@ -1,8 +1,11 @@
 import { useState } from 'react'
 import { ChevronRight, Search, Star } from 'lucide-react'
 import type { Restaurant } from '../data'
-import type { CommonProps } from '../nav'
+import type { CommonProps, SearchFilters } from '../nav'
 import { HeartButton, MapIllustration, loyaltyTeaser } from '../components/kit'
+import { QuickFilters, SearchBox, SearchSort, SearchSummary } from '../components/SearchControls'
+import { activeFilterCount, defaultSearchFilters, isOpenAt, openingHoursOf, parisClock } from '../lib/search'
+import { useRestaurantSearch } from '../hooks/use-search'
 
 export function RestaurantCard({ restaurant, favorite, onFavorite, onOpen, large = false, compact = false }: {
   restaurant: Restaurant
@@ -12,6 +15,9 @@ export function RestaurantCard({ restaurant, favorite, onFavorite, onOpen, large
   large?: boolean
   compact?: boolean
 }) {
+  const clock = parisClock()
+  const open = isOpenAt(restaurant, clock.day, clock.minutes)
+  const hoursKnown = openingHoursOf(restaurant).some((day) => day.day === clock.day)
   return (
     <article className={`restaurant-card ${large ? 'large' : ''} ${compact ? 'compact' : ''}`}>
       <button className="restaurant-image-button" type="button" onClick={onOpen}>
@@ -29,19 +35,24 @@ export function RestaurantCard({ restaurant, favorite, onFavorite, onOpen, large
           {restaurant.cuisine} · {restaurant.distance}
         </span>
         {!compact && <span className="loyalty-teaser">{loyaltyTeaser(restaurant)}</span>}
-        <span className={restaurant.open ? 'open-now' : 'closed-now'}>
-          {restaurant.open ? 'Ouvert maintenant' : 'Fermé pour le moment'}
+        {restaurant.avgPrice > 0 && <span className="muted" style={{ fontSize: 12 }}>{restaurant.avgPrice.toLocaleString('fr-FR')} € en moyenne / pers.</span>}
+        <span className={open ? 'open-now' : 'closed-now'}>
+          {open ? 'Ouvert maintenant' : hoursKnown ? 'Fermé pour le moment' : 'Horaires non renseignés'}
         </span>
       </button>
     </article>
   )
 }
 
-export default function HomePage({ go, favorites, toggleFavorite, restaurants, backendConnected = false }: CommonProps & { restaurants: Restaurant[]; backendConnected?: boolean }) {
+export default function HomePage({ go, favorites, toggleFavorite, restaurants, backendConnected = false, filters, setFilters }: CommonProps & {
+  restaurants: Restaurant[]; backendConnected?: boolean; filters: SearchFilters; setFilters: (filters: SearchFilters) => void
+}) {
   const [mapRestaurant, setMapRestaurant] = useState('amina')
   const [whyVisible, setWhyVisible] = useState(false)
   const featured = restaurants[0]
   const selected = restaurants.find((item) => item.id === mapRestaurant) || featured
+  const matching = useRestaurantSearch(restaurants, filters)
+  const searching = !!filters.query.trim() || activeFilterCount(filters) > 0
 
   return (
     <main className="page page-with-nav">
@@ -53,15 +64,26 @@ export default function HomePage({ go, favorites, toggleFavorite, restaurants, b
         </p>
       </header>
 
-      <button className="search-bar" type="button" onClick={() => go('search')}>
-        <Search size={20} strokeWidth={1.7} />
-        <span>Paris et alentours</span>
-      </button>
+      <SearchBox label="Rechercher une table" placeholder="Une cuisine, un plat, une table…" value={filters.query}
+        onChange={(query) => setFilters({ ...filters, query })} onSubmit={() => go('results')}
+        onFilters={() => go('search')} filterCount={activeFilterCount(filters)} />
+      <QuickFilters filters={filters} onChange={setFilters} />
       <p className="microcopy">
         {backendConnected ? 'Connecté au serveur · données en temps réel' : 'Aperçu local · serveur hors ligne, données de démonstration'}
       </p>
 
-      <section style={{ marginTop: 28 }}>
+      {searching ? <section className="home-search-results" aria-label="Résultats de recherche">
+        <SearchSummary count={matching.length} filters={filters} onReset={() => setFilters(defaultSearchFilters())} />
+        <SearchSort filters={filters} onChange={setFilters} />
+        <div className="restaurant-stack">{matching.map((restaurant) => <RestaurantCard key={restaurant.id} restaurant={restaurant}
+          favorite={favorites.has(restaurant.id)} onFavorite={() => toggleFavorite(restaurant.id)}
+          onOpen={() => go('restaurant', { restaurantId: restaurant.id })} compact />)}</div>
+        {!matching.length && <div className="empty-state"><span><Search size={26} /></span><h2>Aucune table pour ces critères</h2>
+          <p>Essayez une autre envie ou retirez un filtre.</p>
+          <button className="outline-button full" type="button" onClick={() => go('search')}>Ajuster les filtres</button>
+        </div>}
+      </section> : <>
+      {featured && <section style={{ marginTop: 28 }}>
         <h2 style={{ margin: '0 0 12px' }}>La table de la semaine</h2>
         <RestaurantCard
           restaurant={featured}
@@ -79,9 +101,9 @@ export default function HomePage({ go, favorites, toggleFavorite, restaurants, b
             lui donne {featured.rating}/5.
           </p>
         )}
-      </section>
+      </section>}
 
-      <section style={{ marginTop: 30 }}>
+      {selected && <section style={{ marginTop: 30 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 12 }}>
           <div>
             <h2 style={{ margin: 0 }}>Près de vous</h2>
@@ -105,7 +127,7 @@ export default function HomePage({ go, favorites, toggleFavorite, restaurants, b
             compact
           />
         </div>
-      </section>
+      </section>}
 
       <section style={{ marginTop: 30 }}>
         <h2 style={{ margin: '0 0 12px' }}>Pour changer d’air</h2>
@@ -121,6 +143,7 @@ export default function HomePage({ go, favorites, toggleFavorite, restaurants, b
           ))}
         </div>
       </section>
+      </>}
     </main>
   )
 }

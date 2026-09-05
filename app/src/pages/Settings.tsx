@@ -3,6 +3,8 @@ import { ChevronRight, Database, FlaskConical, LayoutGrid, RotateCcw, Star, Stor
 import { userReviews, userVisits } from '../data'
 import type { CommonProps } from '../nav'
 import { Tabs } from '../components/kit'
+import { AccountSection } from '../components/AccountSection'
+import { getAccount } from '../lib/api'
 
 function UserProfileSummary({ onOpen, liked = 3, visits = 15, reviews = 2, onOpenLiked, onOpenVisits, onOpenReviews }: {
   onOpen: () => void
@@ -68,7 +70,9 @@ export function SettingsPage({ go, favorites, toggleFavorite, resolveRestaurant,
         Votre profil membre, vos restaurants likés et les préférences de l’application.
       </p>
 
-      <UserProfileSummary
+      <AccountSection />
+
+      {!getAccount() && <UserProfileSummary
         onOpen={() => go('userProfile')}
         liked={favorites.size}
         visits={totalVisits}
@@ -76,7 +80,7 @@ export function SettingsPage({ go, favorites, toggleFavorite, resolveRestaurant,
         onOpenLiked={() => go('likedRestaurants')}
         onOpenVisits={() => go('visits')}
         onOpenReviews={() => go('myReviews')}
-      />
+      />}
 
       <section style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 24 }}>
         <button className="settings-row" type="button" onClick={() => setReduceMotion(!reduceMotion)}>

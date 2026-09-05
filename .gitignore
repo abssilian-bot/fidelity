@@ -26,3 +26,9 @@ scripts/fix_budget_cache.py
 # scripts personnels Berlin
 scripts/build_book_berlin_pdf.py
 scripts/build_budget_berlin.py
+
+# Configuration privée et artefacts locaux
+**/.env.*
+!**/.env.example
+*.tsbuildinfo
+.local/

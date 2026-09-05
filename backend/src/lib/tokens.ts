@@ -18,15 +18,15 @@ export function signToken(payload: Record<string, unknown>, ttlSeconds: number):
 }
 
 export function verifyToken<T extends Record<string, unknown>>(token: string): T | null {
-  const [body, sig] = token.split('.')
-  if (!body || !sig) return null
+  const [body, sig, extra] = token.split('.')
+  if (!body || !sig || extra !== undefined) return null
   const expected = crypto.createHmac('sha256', SECRET).update(body).digest('base64url')
   const a = Buffer.from(sig)
   const b = Buffer.from(expected)
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null
   try {
     const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'))
-    if (typeof payload.exp !== 'number' || payload.exp < Date.now()) return null
+    if (!payload || typeof payload.exp !== 'number' || !Number.isFinite(payload.exp) || payload.exp <= Date.now()) return null
     return payload as T
   } catch {
     return null

@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import type { PrismaClient, Prisma } from '@prisma/client'
+import { searchProfileFields } from '../lib/search-profile.js'
 
 const listQuery = z.object({
   diet: z.string().max(50).optional(),       // ex: "Halal"
@@ -16,11 +17,11 @@ const updateRestaurant = z
     description: z.string().max(1000),
     address: z.string().max(200),
     district: z.string().max(50),
-    hours: z.array(z.object({ day: z.string().max(20), open: z.string().max(10), close: z.string().max(10) })).max(14),
     diets: z.array(z.string().max(50)).max(10),
     imageUrl: z.string().max(500),
     menuPdfUrl: z.string().max(500).nullable(),
     deliverooUrl: z.string().max(500).nullable(),
+    ...searchProfileFields,
   })
   .partial()
 
@@ -39,6 +40,7 @@ const publicSelect = {
   id: true, name: true, slug: true, cuisine: true, description: true,
   address: true, district: true, lat: true, lng: true, hours: true,
   diets: true, imageUrl: true, menuPdfUrl: true, deliverooUrl: true,
+  foodTags: true, services: true, avgPrice: true, maxGuests: true,
 } satisfies Prisma.RestaurantSelect
 
 export function restaurantRoutes(app: FastifyInstance, prisma: PrismaClient) {

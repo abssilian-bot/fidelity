@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Gift, Plus, ShoppingBasket, SlidersHorizontal } from 'lucide-react'
+import { CreditCard, Gift, LoaderCircle, Plus, ShoppingBasket, SlidersHorizontal } from 'lucide-react'
 import { getRestaurant, historyItems } from '../data'
 import type { Restaurant } from '../data'
 import type { CommonProps } from '../nav'
 import { LoyaltyCard, Notice, Tabs } from '../components/kit'
+import { AppleWalletButton } from '../components/CardActions'
 
 const KIND_ICONS = {
   gain: Plus,
@@ -12,9 +13,9 @@ const KIND_ICONS = {
   order: ShoppingBasket,
 }
 
-export function LoyaltyPage({ go, restaurants }: CommonProps & { restaurants: Restaurant[] }) {
+export function LoyaltyPage({ go, restaurants, hasCard, cardsLoading, cardsUnavailable, reloadCards }: CommonProps & { restaurants: Restaurant[] }) {
   const [activeTab, setActiveTab] = useState('Mes cartes')
-  const myCards = [restaurants[0], restaurants[2]]
+  const myCards = restaurants.filter((restaurant) => hasCard(restaurant.id))
 
   return (
     <main className="page page-with-nav">
@@ -27,14 +28,30 @@ export function LoyaltyPage({ go, restaurants }: CommonProps & { restaurants: Re
 
       {activeTab === 'Mes cartes' ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 22, marginTop: 18 }}>
+          {cardsLoading ? (
+            <p className="card-owned" role="status"><LoaderCircle size={18} className="animate-spin" /> Chargement de vos cartes…</p>
+          ) : cardsUnavailable ? (
+            <div className="empty-state">
+              <p>Impossible de charger vos cartes pour le moment.</p>
+              <button className="outline-button full" type="button" onClick={() => void reloadCards()}>Réessayer</button>
+            </div>
+          ) : myCards.length === 0 && (
+            <div className="empty-state">
+              <CreditCard size={28} />
+              <h2>Votre première carte vous attend</h2>
+              <p>Choisissez un restaurant et appuyez sur « Ajouter à mes cartes ».</p>
+            </div>
+          )}
           {myCards.map((restaurant) => (
             <div key={restaurant.id} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <LoyaltyCard restaurant={restaurant} compact />
+              <AppleWalletButton restaurant={restaurant} />
               <button className="outline-button full" type="button" onClick={() => go('card', { restaurantId: restaurant.id })}>
                 <Gift size={18} /> Voir la carte {restaurant.name}
               </button>
             </div>
           ))}
+          <button className="outline-button full" type="button" onClick={() => go('discovery')}><Plus size={18} /> Découvrir d’autres cartes</button>
         </div>
       ) : (
         <div className="history-list">

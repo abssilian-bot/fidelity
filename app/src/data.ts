@@ -1,3 +1,5 @@
+import { extraDemoRestaurants } from './demo-restaurants.ts'
+
 export type LoyaltyStyle = 'braise' | 'creme' | 'encre'
 export type LoyaltyType = 'stamps' | 'points'
 
@@ -64,6 +66,10 @@ export interface Restaurant {
   id: string
   name: string
   cuisine: string
+  /** Spécialités et services déclarés dans la Façade. */
+  foodTags?: string[]
+  services?: string[]
+  openingHours?: Array<{ day: number; intervals: Array<{ open: string; close: string }> }>
   district: string
   distance: string
   rating: string
@@ -78,6 +84,8 @@ export interface Restaurant {
   /** Taille maximale de table acceptée. */
   maxGuests: number
   loyalty: Loyalty
+  /** False lorsqu'aucun programme actif n'est publié par le restaurant. */
+  loyaltyAvailable?: boolean
   menu: MenuItem[]
   reviews: Review[]
   /** Offres ponctuelles (happy hour, 1+1…) — DISTINCTES du programme de fidélité. */
@@ -430,6 +438,7 @@ export const restaurants: Restaurant[] = [
       },
     ],
   },
+  ...extraDemoRestaurants,
 ]
 
 export const feedPosts: FeedPost[] = [
@@ -528,6 +537,7 @@ export interface UserReview {
 
 export interface Member {
   id: string
+  source?: 'server'
   name: string
   handle: string
   initials: string
@@ -678,7 +688,9 @@ export const members: Member[] = [
   },
 ]
 
-export const getMember = (id: string): Member => members.find((member) => member.id === id) || members[0]
+const serverMembers = new Map<string, Member>()
+export const cacheMembers = (items: Member[]) => items.forEach((member) => serverMembers.set(member.id, member))
+export const getMember = (id: string): Member | undefined => serverMembers.get(id) ?? members.find((member) => member.id === id)
 
 /* ---------- Espace restaurateur (démonstration) ---------- */
 

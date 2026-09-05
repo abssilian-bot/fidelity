@@ -5,6 +5,7 @@ import type { Offer, Restaurant } from '../data'
 import { userVisits } from '../data'
 import type { CommonProps } from '../nav'
 import { HeartButton, LoyaltyCard, Tabs } from '../components/kit'
+import { CardActions } from '../components/CardActions'
 
 /** Offres ponctuelles — distinctes du programme de fidélité. */
 const OFFER_LABELS: Record<Offer['kind'], string> = {
@@ -28,7 +29,7 @@ const offerIsLive = (offer: Offer) => {
   return offer.days.includes(now.getDay()) && hour >= offer.startHour && hour < offer.endHour
 }
 
-export function RestaurantPage({ go, restaurant, favorites, toggleFavorite, sharedPosts = [], myReviews = [] }: CommonProps & { restaurant: Restaurant }) {
+export function RestaurantPage({ go, restaurant, favorites, toggleFavorite, sharedPosts = [], myReviews = [], ...cardProps }: CommonProps & { restaurant: Restaurant }) {
   const [activeTab, setActiveTab] = useState('Publications')
   const restaurantShares = sharedPosts.filter((share) => share.restaurantId === restaurant.id && share.status === 'published')
   const restaurantMyReviews = myReviews.filter((review) => review.restaurantId === restaurant.id)
@@ -58,13 +59,14 @@ export function RestaurantPage({ go, restaurant, favorites, toggleFavorite, shar
       </button>
 
       <section className="restaurant-loyalty-section">
-        <h2 style={{ margin: 0 }}>Votre carte Fidelity</h2>
+        <h2 style={{ margin: 0 }}>{cardProps.hasCard(restaurant.id) ? 'Votre carte Fidelity' : 'La carte Fidelity'}</h2>
         <p className="muted" style={{ margin: 0, fontSize: 13.5 }}>
-          Ajout local à Mes cartes, sans compte ni pass Wallet réel.
+          {cardProps.hasCard(restaurant.id) ? 'Retrouvez votre progression et vos récompenses à chaque visite.' : 'Ajoutez cette carte pour commencer à cumuler des récompenses.'}
         </p>
         <LoyaltyCard restaurant={restaurant} compact />
+        <CardActions key={restaurant.id} {...cardProps} restaurant={restaurant} />
         <button className="outline-button full" type="button" onClick={() => go('card', { restaurantId: restaurant.id })}>
-          <CreditCard size={18} /> Voir ma carte
+          <CreditCard size={18} /> {cardProps.hasCard(restaurant.id) ? 'Voir ma carte' : 'Découvrir le programme'}
         </button>
       </section>
 
@@ -213,7 +215,7 @@ export function RestaurantPage({ go, restaurant, favorites, toggleFavorite, shar
   )
 }
 
-export function CardDetailPage({ go, restaurant }: CommonProps & { restaurant: Restaurant }) {
+export function CardDetailPage({ go, restaurant, ...cardProps }: CommonProps & { restaurant: Restaurant }) {
   const loyalty = restaurant.loyalty
   const tiers = loyalty.tiers?.length ? loyalty.tiers : [{ at: loyalty.target, reward: loyalty.reward }]
   const nextTier = tiers.find((tier) => tier.at > loyalty.current) ?? tiers[tiers.length - 1]
@@ -228,13 +230,14 @@ export function CardDetailPage({ go, restaurant }: CommonProps & { restaurant: R
     <main className="page">
       <div className="detail-header">
         <div>
-          <span className="eyebrow">Ma carte</span>
+          <span className="eyebrow">{cardProps.hasCard(restaurant.id) ? 'Ma carte' : 'Carte de fidélité'}</span>
           <h1 style={{ margin: '6px 0 4px' }}>{restaurant.name}</h1>
           <p className="muted" style={{ margin: 0, fontSize: 14 }}>{loyalty.title}</p>
         </div>
       </div>
 
       <LoyaltyCard restaurant={restaurant} />
+      <div style={{ marginTop: 18 }}><CardActions key={restaurant.id} {...cardProps} restaurant={restaurant} /></div>
 
       <section className="reward-panel">
         <span>

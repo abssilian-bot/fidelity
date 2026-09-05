@@ -1,5 +1,8 @@
-import type { HistoryItem, Loyalty, ProgramClient, Restaurant, ScanEvent } from '../data'
+import { cacheMembers } from '../data'
+import type { HistoryItem, Loyalty, Member, ProgramClient, Restaurant, ScanEvent } from '../data'
 import type { Share } from '../nav'
+import type { SearchProfile } from './search-profile'
+import { WEEK_DAYS } from './search-catalog'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pont entre le front et l'API Fidelity (backend/).
@@ -38,15 +41,102 @@ export interface BackendState {
   backendIds: Record<string, string>
   /** id front → solde réel du membre connecté */
   balances: Record<string, number>
+  memberships: Record<string, ApiMembership>
+  membershipsReady: boolean
 }
 
-let backendState: BackendState = { connected: false, restaurants: {}, backendIds: {}, balances: {} }
+export interface ApiMembership {
+  id: string
+  publicCode: string
+  restaurant: { slug: string }
+  balance: number
+}
+
+let backendState: BackendState = { connected: false, restaurants: {}, backendIds: {}, balances: {}, memberships: {}, membershipsReady: false }
 
 export const getBackendState = () => backendState
 
 // ---------- Appels HTTP ----------
 
 const tokens: Partial<Record<Role, string>> = {}
+const sessionFlights: Partial<Record<Role, Promise<void>>> = {}
+let sessionGeneration = 0
+let validatedAccountToken = ''
+let emailMode: Promise<boolean> | undefined
+
+export interface Account {
+  token: string
+  user: { id: string; email: string; pseudo: string | null; displayName: string | null; role: string }
+}
+export interface LoginLinkResponse { message: string; devLink?: string }
+
+const storageGet = (key: string) => { try { return localStorage.getItem(key) } catch { return null } }
+const storageRemove = (key: string) => { try { localStorage.removeItem(key) } catch { /* Navigation privée : aucune session à conserver. */ } }
+const tokenExpired = (token: string): boolean => {
+  try {
+    const body = token.split('.')[0].replace(/-/g, '+').replace(/_/g, '/')
+    const { exp } = JSON.parse(atob(body))
+    return typeof exp !== 'number' || !Number.isFinite(exp) || exp <= Date.now()
+  } catch { return true }
+}
+
+export function logoutAccount(): void {
+  sessionGeneration++
+  validatedAccountToken = ''
+  storageRemove('fidelity.account')
+  for (const role of ['member', 'restaurant'] as const) {
+    storageRemove(`fidelity.token.${role}`)
+    delete tokens[role]
+    delete sessionFlights[role]
+  }
+  backendState = { ...backendState, memberships: {}, balances: {}, membershipsReady: false }
+}
+
+export function getAccount(): Account | null {
+  const raw = storageGet('fidelity.account')
+  if (!raw) return null
+  try {
+    const account = JSON.parse(raw) as Account
+    if (!account || typeof account.token !== 'string' || !account.user || typeof account.user.id !== 'string' || typeof account.user.email !== 'string' || tokenExpired(account.token)) {
+      logoutAccount(); return null
+    }
+    return account
+  } catch { logoutAccount(); return null }
+}
+
+export async function requestLoginLink(email: string): Promise<LoginLinkResponse> {
+  return apiCall<LoginLinkResponse>('POST', '/auth/magic-link', { body: { email: email.trim().toLowerCase() } })
+}
+
+// React StrictMode peut relancer l'effet de démarrage : un lien n'est vérifié qu'une fois.
+const loginFlights = new Map<string, Promise<Account>>()
+export function completeLogin(token: string): Promise<Account> {
+  const existing = loginFlights.get(token)
+  if (existing) return existing
+  const operation = (async () => {
+    const account = await apiCall<Account>('GET', `/auth/verify?token=${encodeURIComponent(token)}`)
+    if (!account?.user?.id || !account.user.email || typeof account.token !== 'string' || tokenExpired(account.token)) throw new Error('Réponse de connexion invalide.')
+    logoutAccount()
+    try {
+      localStorage.setItem('fidelity.account', JSON.stringify(account))
+      localStorage.setItem('fidelity.token.member', account.token)
+    } catch {
+      logoutAccount()
+      throw new Error('Le navigateur ne peut pas conserver ta connexion. Autorise le stockage puis redemande un lien.')
+    }
+    tokens.member = account.token
+    validatedAccountToken = account.token
+    return account
+  })()
+  loginFlights.set(token, operation)
+  void operation.catch(() => { loginFlights.delete(token) })
+  return operation
+}
+
+class ApiError extends Error {
+  status: number
+  constructor(message: string, status: number) { super(message); this.status = status }
+}
 
 async function apiCall<T = unknown>(
   method: string,
@@ -57,40 +147,81 @@ async function apiCall<T = unknown>(
   if (options.role && tokens[options.role]) {
     headers.Authorization = `Bearer ${tokens[options.role]}`
   }
-  const res = await fetch(`${API_URL}${path}`, {
-    method,
-    headers,
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-  })
+  let res: Response
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      method, headers, cache: 'no-store', referrerPolicy: 'no-referrer',
+      signal: AbortSignal.timeout(10_000),
+      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    })
+  } catch { throw new ApiError('Le serveur est indisponible. Tu peux continuer à explorer la démo et réessayer plus tard.', 0) }
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))) as { error?: string }
-    throw new Error(err.error ?? `HTTP ${res.status}`)
+    if (res.status === 401 && options.role) {
+      const account = getAccount()
+      if (account && tokens[options.role] === account.token) {
+        logoutAccount()
+        window.dispatchEvent(new Event('fidelity:session-expired'))
+      } else { delete tokens[options.role]; storageRemove(`fidelity.token.${options.role}`) }
+    }
+    throw new ApiError(err.error ?? 'La demande n’a pas pu aboutir. Réessaie plus tard.', res.status)
   }
   return res.json() as Promise<T>
 }
 
-/** Connexion démo : récupère un token de session via le lien magique (mode dev). */
+/** Priorité au compte personnel. Le flux automatique démo reste réservé au serveur sans Resend. */
 export async function ensureSession(role: Role): Promise<void> {
-  if (tokens[role]) return
-  const cached = localStorage.getItem(`fidelity.token.${role}`)
+  const pending = sessionFlights[role]
+  if (pending) return pending
+  const operation = establishSession(role)
+  sessionFlights[role] = operation
+  try { await operation } finally { if (sessionFlights[role] === operation) delete sessionFlights[role] }
+}
+
+async function establishSession(role: Role): Promise<void> {
+  const account = getAccount()
+  const generation = sessionGeneration
+  const stillCurrent = () => { if (generation !== sessionGeneration) throw new Error('La session a changé. Réessaie.') }
+  if (account) {
+    // Un membre connecté ne doit jamais hériter du compte propriétaire de démonstration.
+    tokens[role] = account.token
+    if (validatedAccountToken !== account.token) {
+      await apiCall('GET', '/auth/me', { role })
+      stillCurrent()
+      validatedAccountToken = account.token
+    }
+    return
+  }
+  emailMode ??= apiCall<{ emailEnabled: boolean }>('GET', '/auth/config')
+    .then((config) => config.emailEnabled)
+    .catch((error) => { emailMode = undefined; if (error instanceof ApiError && error.status === 404) return false; throw error })
+  if (await emailMode) throw new Error('Connecte-toi par e-mail depuis les Réglages pour utiliser ton compte.')
+  stillCurrent()
+  if (tokens[role] && !tokenExpired(tokens[role]!)) return
+  const cached = storageGet(`fidelity.token.${role}`)
   if (cached) {
     tokens[role] = cached
     try {
       await apiCall('GET', '/auth/me', { role })
+      stillCurrent()
       return
-    } catch {
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.status !== 401) throw error
       // Token expiré → on en redemande un
-      localStorage.removeItem(`fidelity.token.${role}`)
+      storageRemove(`fidelity.token.${role}`)
       delete tokens[role]
     }
   }
-  const { devLink } = await apiCall<{ devLink: string }>('POST', '/auth/magic-link', {
+  const { devLink } = await apiCall<LoginLinkResponse>('POST', '/auth/magic-link', {
     body: { email: DEMO_EMAILS[role] },
   })
+  stillCurrent()
+  if (!devLink) throw new Error('Connecte-toi par e-mail depuis les Réglages.')
   const magicToken = new URL(devLink).searchParams.get('token') ?? ''
-  const session = await apiCall<{ token: string }>('GET', `/auth/verify?token=${magicToken}`)
+  const session = await apiCall<{ token: string }>('GET', `/auth/verify?token=${encodeURIComponent(magicToken)}`)
+  stillCurrent()
   tokens[role] = session.token
-  localStorage.setItem(`fidelity.token.${role}`, session.token)
+  try { localStorage.setItem(`fidelity.token.${role}`, session.token) } catch { /* La démo reste accessible en mémoire. */ }
 }
 
 // ---------- Adaptateurs backend → formes du front ----------
@@ -100,6 +231,7 @@ export const priceToCents = (price: string) =>
   Math.round(Number.parseFloat(price.replace(/[^\d,.-]/g, '').replace(',', '.')) * 100) || 0
 
 interface ApiProgram {
+  active?: boolean
   type: 'STAMPS' | 'POINTS'
   title: string
   target: number
@@ -117,6 +249,11 @@ interface ApiRestaurant {
   address: string
   description: string
   diets: string[]
+  foodTags?: string[]
+  services?: string[]
+  avgPrice?: number
+  maxGuests?: number
+  hours?: Array<{ day: string; open: string; close: string }>
   program?: ApiProgram | null
   menuItems?: Array<{ name: string; description: string; priceCents: number }>
   reviews?: Array<{ rating: number; text: string; author?: { displayName?: string; pseudo?: string } }>
@@ -138,8 +275,8 @@ function mergeRestaurant(demo: Restaurant | undefined, api: ApiRestaurant): Rest
       hours: [],
       diets: api.diets,
       open: true,
-      avgPrice: 20,
-      maxGuests: 6,
+      avgPrice: 0,
+      maxGuests: 0,
       loyalty: {
         type: 'stamps',
         title: 'Programme fidélité',
@@ -158,17 +295,29 @@ function mergeRestaurant(demo: Restaurant | undefined, api: ApiRestaurant): Rest
 
   return {
     ...base,
+    loyaltyAvailable: !!api.program && api.program.active !== false,
     name: api.name,
     cuisine: api.cuisine,
     district: api.district,
     address: api.address,
     description: api.description || base.description,
-    diets: api.diets?.length ? api.diets : base.diets,
+    diets: api.diets ?? base.diets,
+    foodTags: api.foodTags ?? base.foodTags,
+    services: api.services ?? base.services,
+    avgPrice: api.avgPrice ?? base.avgPrice,
+    maxGuests: api.maxGuests ?? base.maxGuests,
+    ...(Array.isArray(api.hours) ? {
+      hours: api.hours.filter((period) => period.open && period.close).map((period) => `${period.day} · ${period.open}–${period.close}`),
+      openingHours: WEEK_DAYS.map((name, day) => ({ day,
+        intervals: api.hours!.filter((period) => period.day.toLocaleLowerCase('fr') === name.toLocaleLowerCase('fr') && period.open && period.close)
+          .map((period) => ({ open: period.open, close: period.close })),
+      })),
+    } : {}),
     loyalty: api.program
       ? {
           type: api.program.type.toLowerCase() as Loyalty['type'],
           title: api.program.title,
-          current: base.loyalty.current,
+          current: 0,
           target: api.program.target,
           reward: api.program.reward,
           rule: api.program.rule,
@@ -180,10 +329,10 @@ function mergeRestaurant(demo: Restaurant | undefined, api: ApiRestaurant): Rest
           style: api.program.style.toLowerCase() as Loyalty['style'],
         }
       : base.loyalty,
-    menu: api.menuItems?.length
+    menu: Array.isArray(api.menuItems)
       ? api.menuItems.map((item) => ({ name: item.name, description: item.description, price: priceToString(item.priceCents) }))
       : base.menu,
-    reviews: api.reviews?.length
+    reviews: Array.isArray(api.reviews)
       ? api.reviews.map((review) => ({
           author: review.author?.displayName ?? review.author?.pseudo ?? 'Membre',
           rating: `${review.rating}/5`,
@@ -197,7 +346,7 @@ function mergeRestaurant(demo: Restaurant | undefined, api: ApiRestaurant): Rest
 
 /** Charge les restaurants réels + les soldes du membre démo. Ne jette jamais. */
 export async function bootstrapBackend(demoRestaurants: Restaurant[]): Promise<BackendState> {
-  const state: BackendState = { connected: false, restaurants: {}, backendIds: {}, balances: {} }
+  const state: BackendState = { connected: false, restaurants: {}, backendIds: {}, balances: {}, memberships: {}, membershipsReady: false }
 
   try {
     const list = await apiCall<ApiRestaurant[]>('GET', '/restaurants')
@@ -221,20 +370,52 @@ export async function bootstrapBackend(demoRestaurants: Restaurant[]): Promise<B
 
   try {
     await ensureSession('member')
-    const mine = await apiCall<Array<{ restaurant: { slug: string }; balance: number }>>(
+    const mine = await apiCall<ApiMembership[]>(
       'GET',
       '/memberships/mine',
       { role: 'member' },
     )
     for (const m of mine) {
-      state.balances[SLUG_TO_ID[m.restaurant.slug] ?? m.restaurant.slug] = m.balance
+      const id = SLUG_TO_ID[m.restaurant.slug] ?? m.restaurant.slug
+      state.balances[id] = m.balance
+      state.memberships[id] = m
     }
+    state.membershipsReady = true
   } catch {
-    // Pas de session → soldes démo conservés
+    // Ne jamais faire passer une carte de démonstration pour une adhésion réelle.
   }
 
   backendState = state
   return state
+}
+
+/** Adhésion explicite : un échec réseau ne crée jamais de carte locale de remplacement. */
+export async function addMyCard(restaurantId: string): Promise<BackendState> {
+  if (!backendState.connected || !backendState.backendIds[restaurantId]) throw new Error('Ce restaurant n’est pas disponible sur le serveur.')
+  await ensureSession('member')
+  const slug = Object.keys(SLUG_TO_ID).find((key) => SLUG_TO_ID[key] === restaurantId) ?? restaurantId
+  const membership = await apiCall<ApiMembership>('POST', '/memberships', { role: 'member', body: { slug } })
+  // Ancienne API : récupérer le solde existant au lieu de le remplacer par zéro.
+  if (typeof membership.balance !== 'number') return refreshMyCards()
+  backendState = { ...backendState,
+    memberships: { ...backendState.memberships, [restaurantId]: membership },
+    balances: { ...backendState.balances, [restaurantId]: membership.balance },
+  }
+  return backendState
+}
+
+export async function refreshMyCards(): Promise<BackendState> {
+  await ensureSession('member')
+  const mine = await apiCall<ApiMembership[]>('GET', '/memberships/mine', { role: 'member' })
+  const memberships: BackendState['memberships'] = {}
+  const balances: BackendState['balances'] = {}
+  for (const membership of mine) {
+    const id = SLUG_TO_ID[membership.restaurant.slug] ?? membership.restaurant.slug
+    memberships[id] = membership
+    balances[id] = membership.balance
+  }
+  backendState = { ...backendState, memberships, balances, membershipsReady: true }
+  return backendState
 }
 
 // ---------- Historique du membre ----------
@@ -339,14 +520,14 @@ export async function fetchClients(frontId: string): Promise<{ clients: ProgramC
 /** Publie la façade (profil + menu) d'un restaurant sur le serveur. */
 export async function publishProfile(
   frontId: string,
-  profile: { name: string; cuisine: string; district: string; address: string; description: string; diets: string[] },
+  profile: { name: string; cuisine: string; district: string; address: string; description: string } & SearchProfile,
   menu: Array<{ name: string; description: string; price: string }>,
-): Promise<boolean> {
+): Promise<boolean | 'unsupported'> {
   const backendId = backendState.backendIds[frontId]
   if (!backendId) return false
   try {
     await ensureSession('restaurant')
-    await apiCall('PUT', `/restaurants/${backendId}`, {
+    const saved = await apiCall<{ foodTags?: string[]; services?: string[]; avgPrice?: number; maxGuests?: number }>('PUT', `/restaurants/${backendId}`, {
       role: 'restaurant',
       body: {
         name: profile.name,
@@ -355,8 +536,14 @@ export async function publishProfile(
         address: profile.address,
         description: profile.description,
         diets: profile.diets,
+        foodTags: profile.foodTags,
+        services: profile.services,
+        avgPrice: profile.avgPrice,
+        maxGuests: profile.maxGuests,
+        hours: profile.openingHours.flatMap((day) => day.intervals.map((period) => ({ day: WEEK_DAYS[day.day].toLocaleLowerCase('fr'), ...period }))),
       },
     })
+    if (!Array.isArray(saved.foodTags) || !Array.isArray(saved.services) || saved.avgPrice === undefined || saved.maxGuests === undefined) return 'unsupported'
     await apiCall('PUT', `/restaurants/${backendId}/menu`, {
       role: 'restaurant',
       body: {
@@ -369,6 +556,39 @@ export async function publishProfile(
   } catch {
     return false
   }
+}
+
+interface ApiMember {
+  id: string; displayName: string | null; pseudo: string; bio: string | null; avatarUrl: string | null
+  posts?: Array<{ imageUrl: string }>; _count?: { posts: number; reviews: number }
+}
+function mapMember(member: ApiMember): Member {
+  const name = member.displayName || member.pseudo
+  return { id: member.id, source: 'server', name, handle: `@${member.pseudo}`, initials: name.split(' ').map((part) => part[0]).join('').slice(0, 2),
+    bio: member.bio ?? '', posts: member._count?.posts ?? 0, reviews: member._count?.reviews ?? 0,
+    liked: 0, visits: 0, likedRestaurants: [], visitList: [], reviewList: [], photos: member.posts?.map((post) => post.imageUrl) ?? [],
+  }
+}
+
+export async function fetchMemberSearch(query: string, signal: AbortSignal): Promise<Member[] | null> {
+  try {
+    const response = await fetch(`${API_URL}/members/search?q=${encodeURIComponent(query)}`, { signal })
+    if (!response.ok) return null
+    const data = await response.json() as ApiMember[]
+    const result = data.map(mapMember)
+    cacheMembers(result)
+    return result
+  } catch { return null }
+}
+
+export async function fetchPublicMember(id: string, signal: AbortSignal): Promise<Member | null> {
+  try {
+    const response = await fetch(`${API_URL}/members/${encodeURIComponent(id)}`, { signal })
+    if (!response.ok) return null
+    const result = mapMember(await response.json() as ApiMember)
+    cacheMembers([result])
+    return result
+  } catch { return null }
 }
 
 /** Publie le programme fidélité d'un restaurant sur le serveur. */

@@ -99,7 +99,7 @@ backend avec la démo (correspondance slug backend ↔ id front dans `SLUG_TO_ID
 2. **Brancher les offres au backend** : table `Offer` (restaurantId, kind, title, detail, schedule,
    days, startHour, endHour) + routes CRUD propriétaire + publication depuis Façade, pour que les
    offres soient réelles et synchronisées entre appareils (aujourd'hui : `data.ts` + brouillons locaux).
-3. Auth réelle : brancher Supabase Auth (envoi d'e-mails) à la place du magic-link dev.
+3. Auth réelle : intégration Resend codée le 6 septembre (voir section 10), à activer avec une clé et un expéditeur autorisé.
 4. Upload de vraies photos (Supabase Storage) au lieu des 3 images de démo.
 5. Passes Wallet Apple/Google (phase 2 — compte Apple Developer 99 $/an).
 6. Scan QR commerçant avec caméra (jsQR) dans la PWA.
@@ -140,10 +140,11 @@ promotions du restaurant, distinctes du programme fidélité. Champ `offers: Off
 - `GET /restaurants/:slug` — page complète (profil, menu, programme, avis)
 - `GET /restaurants/:slug/shares/public` — FoodShare republiés (fil public)
 
-### Auth (mode dev)
-- `POST /auth/magic-link` `{email}` → renvoie `devLink` (en prod : vrai e-mail)
+### Auth (Resend ou mode dev sans clé)
+- `POST /auth/magic-link` `{email}` → envoie un e-mail avec Resend ; sans clé, conserve la réponse `devLink`
 - `GET /auth/verify?token=...` → token de session Bearer
 - `GET /auth/me` 🔒
+- `GET /auth/config` → `{emailEnabled}` (aucun secret), pour éviter les envois aux comptes démo au démarrage
 
 ### Membre 🔒
 - `POST /memberships` `{slug}` — adhérer à un restaurant
@@ -176,7 +177,7 @@ promotions du restaurant, distinctes du programme fidélité. Champ `offers: Off
 | Compte restaurateur démo | `demo-restaurateur@fidelity.local` (possède les 6 restos) |
 | Repo GitHub | `github.com/abssilian-bot/fidelity` (branche `main`) |
 | Base de données | Supabase PostgreSQL (free tier) |
-| Config backend | `backend/.env` : `DATABASE_URL`, `APP_SECRET`, `PORT` |
+| Config backend | `backend/.env` : `DATABASE_URL`, `APP_SECRET`, `PORT`, `RESEND_API_KEY`, `EMAIL_FROM`, `APP_URL` |
 
 ⚠️ **SECRETS** : le `.env` est inclus dans le zip et dans le dump code (section finale) pour que
 tu puisses travailler sans reconfigurer. Il contient le mot de passe de la base. Ne le partage
@@ -214,3 +215,54 @@ Migration BDD après changement du schéma : `cd backend && npx prisma migrate d
 5. Design : pas de gras partout, cartes de fidélité style validé (type B / V1 sans paquet cadeau),
    boutons `outline-button full` pour les actions secondaires, `primary-button` pour l'action principale.
 6. Pas de dépendance payante sans validation explicite du propriétaire.
+
+---
+
+## 10. Connexion par e-mail avec Resend — 6 septembre 2026
+
+La section **Compte**, en haut des Réglages, permet de créer son compte ou de se reconnecter avec son e-mail. Aucun mot de passe. L'utilisateur est créé à la première validation du lien ; les reconnexions retrouvent le même utilisateur.
+
+### Variables privées du backend
+
+```dotenv
+RESEND_API_KEY=
+EMAIL_FROM="Fidelity <onboarding@resend.dev>"
+APP_URL="http://localhost:7100"
+```
+
+- `RESEND_API_KEY` : clé Resend, uniquement dans `backend/.env` ou dans les variables privées de l'hébergeur. Avec une clé, le SDK envoie un e-mail HTML et texte en français. Sans clé, le contrat dev reste disponible : `devLink` dans la réponse et journal de développement.
+- `EMAIL_FROM` : expéditeur autorisé, défaut `Fidelity <onboarding@resend.dev>`.
+- `APP_URL` : adresse publique du frontend. Le lien pointe vers `${APP_URL}/?token=...`. Pour un test sur téléphone, il faut une adresse HTTPS accessible depuis ce téléphone ; `localhost` convient uniquement à la machine de développement.
+- **Sans domaine vérifié, Resend n'envoie qu'à l'adresse du compte Resend (`onboarding@resend.dev`).** Vérifier ensuite un domaine et remplacer `EMAIL_FROM` pour autoriser les inscriptions d'autres membres. [Restriction officielle Resend](https://resend.com/docs/knowledge-base/403-error-resend-dev-domain).
+
+Une clé a été renseignée dans le `.env` privé local après la première série de vérifications. Aucun secret n'est écrit dans la documentation, le frontend ou Git. Le compte Resend a été consulté : aucun domaine d'envoi n'est encore configuré.
+
+L'instance courante utilise `APP_URL=http://127.0.0.1:7100` pour cibler l'aperçu de ce dossier. Un autre serveur Vite du dossier Kimi écoute aussi sur `localhost:7100` via IPv6 ; ne pas confondre les deux versions.
+
+### Contrats et sessions
+
+- `POST /auth/magic-link` conserve le corps `{email}`, le rate limiting et la durée de 15 minutes. En mode Resend, ni la réponse ni les logs ne contiennent le lien. Un refus ou une panne d'envoi produit un **502 générique**.
+- `GET /auth/verify?token=...` conserve la réponse `{token, user}` et la session de 7 jours. Chaque lien est à usage unique grâce à la table `UsedMagicLink` (empreinte SHA-256, expiration), consommée dans la même transaction que la création/recherche du compte. Un rejeu, y compris simultané, est refusé. Les empreintes expirées sont nettoyées.
+- Appliquer **`npx prisma migrate deploy` avant de déployer l'API** : migration `20260906020000_single_use_magic_links`. Elle est appliquée uniquement à la base locale de vérification à ce stade, pas à Supabase.
+- `GET /auth/config` expose seulement `{emailEnabled}`. Quand Resend est actif, le frontend ne demande plus automatiquement de liens pour les comptes démo.
+- `getAccount`, `requestLoginLink`, `completeLogin`, `logoutAccount` sont exportés par `app/src/lib/api.ts`. Session personnelle : `localStorage['fidelity.account'] = {token, user}` ; token membre actif : `fidelity.token.member`. La session réelle a priorité. Une session expirée est nettoyée ; une panne réseau seule ne déconnecte pas le compte.
+- Le token de l'URL est retiré immédiatement, la validation résiste au double montage de React StrictMode, puis l'application se recharge proprement. Un lien refusé renvoie aux Réglages avec le message demandé.
+- Sans API, la démo reste navigable et le formulaire affiche une erreur compréhensible. Sans clé Resend, le bouton « Mode démo : me connecter sans e-mail » permet de terminer le parcours localement.
+
+### Vérifications
+
+Les deux suites historiques ont été exécutées sur une **instance PostgreSQL locale isolée**, API démarrée et clé Resend absente : **27 tests API et 18 tests FoodShare réussis**. Le jeu Supabase n'a pas été utilisé pour ces écritures de test.
+
+`npx tsc --noEmit` côté backend et `npm run build` côté frontend passent. Tests complémentaires : `npm run test:auth` côté backend (SDK Resend avec transport simulé, erreurs d'envoi, confidentialité, usage unique, expiration, rate limiting) et `npm run test:account` côté frontend (stockage, priorité au compte réel, expiration, déconnexion, backend éteint).
+
+L'API locale charge maintenant `.env` avec `npm run dev` et `npm start` (Node 20.12+). Aucun déploiement Render n'a été effectué dans cette tâche.
+
+
+## Déploiement Render vérifié le 6 septembre 2026
+
+- Adresse réelle : https://fidelity-api-mcld.onrender.com (l'adresse fidelity-api.onrender.com est incorrecte).
+- Service Render : srv-dabi6qcs728c73a0gmkg ; dépôt abssilian-bot/fidelity, branche main.
+- Build depuis backend : npm ci --include=dev && npm run build:render (compile également le frontend).
+- Démarrage : npm run start:render (applique les migrations Prisma avant le serveur).
+- Configuration privée Render : RESEND_API_KEY, EMAIL_FROM et APP_URL en plus des variables existantes.
+- Sans domaine Resend vérifié, envoi limité à l'adresse du compte Resend.

@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Compass, CreditCard, Home, LayoutDashboard, Settings, Share2, Store } from 'lucide-react'
-import { getRestaurant, pendingSharesSeed, restaurants as demoRestaurants, setHistoryItems, setProgramClients, setRecentScans, userReviews } from './data'
+import { getRestaurant, pendingSharesSeed, restaurants as demoRestaurants, setHistoryItems, setProgramClients, setRecentScans, userReviews, userVisits } from './data'
 import type { Loyalty, MenuItem, Offer, Restaurant, UserReview } from './data'
-import { bootstrapBackend, decideShareApi, fetchClients, fetchHistory, fetchMyShares, fetchPendingShares, publishShareApi } from './lib/api'
+import { addMyCard, bootstrapBackend, completeLogin, decideShareApi, fetchClients, fetchHistory, fetchMyShares, fetchPendingShares, getAccount, publishShareApi, refreshMyCards } from './lib/api'
 import type { BackendState } from './lib/api'
 import type { AppRole, CommonProps, Route, RouteName, SearchFilters, Share } from './nav'
 import { BackButton } from './components/kit'
@@ -17,6 +17,10 @@ import { RestoClientsPage, RestoDashboardPage, RestoFoodsharePage, RestoPlacesPa
 import { FoodshareComposePage } from './pages/Share'
 import { LoyaltyEditorPage, ProfileEditorPage, QrPosterPage } from './pages/Studio'
 import type { ProfileDraft } from './pages/Studio'
+import { defaultSearchFilters } from './lib/search'
+import { readSearchProfiles, saveSearchProfiles, searchProfileOf, searchProfileSchema } from './lib/search-profile'
+import { WEEK_DAYS } from './lib/search-catalog'
+import { readMyCards, saveMyCards, usedCardIds } from './lib/my-cards'
 
 const MAIN_PAGES = new Set<RouteName>([
   'home',
@@ -42,44 +46,64 @@ const makeDraft = (restaurant: Restaurant): RestoDraft => ({
     district: restaurant.district,
     address: restaurant.address,
     description: restaurant.description,
-    opening: '11:30',
-    closing: '23:00',
-    diets: [...restaurant.diets],
     image: restaurant.image,
+    ...searchProfileOf(restaurant),
   },
   menu: restaurant.menu.map((item) => ({ ...item })),
   loyalty: { ...restaurant.loyalty },
   offers: (restaurant.offers ?? []).map((offer) => ({ ...offer })),
 })
 
+// Retirer le secret avant tout chargement de contenu ou navigation. Conserver la valeur
+// hors de l'effet pour les deux montages de développement de React StrictMode.
+const startupUrl = new URL(window.location.href)
+const startupLoginToken = startupUrl.searchParams.get('token')
+if (startupUrl.searchParams.has('token')) {
+  startupUrl.searchParams.delete('token')
+  window.history.replaceState(window.history.state, '', `${startupUrl.pathname}${startupUrl.search}${startupUrl.hash}`)
+}
+
 function App() {
-  const baseAmina = getRestaurant('amina')
-  const [role, setRole] = useState<AppRole | null>(null)
+  const [role, setRole] = useState<AppRole | null>(() => getAccount() ? 'member' : null)
   const [route, setRoute] = useState<Route>({ name: 'home' })
   const [, setRouteStack] = useState<Route[]>([])
   const [favorites, setFavorites] = useState<Set<string>>(new Set(['amina', 'comptoir', 'miso']))
   const [toast, setToast] = useState('')
   const [backend, setBackend] = useState<BackendState | null>(null)
+  const [localCards, setLocalCards] = useState(() => readMyCards(usedCardIds(demoRestaurants, userVisits)))
+  const addingCards = useRef(new Set<string>())
+  const [pendingCards, setPendingCards] = useState(new Set<string>())
+  const [refreshingCards, setRefreshingCards] = useState(false)
   const [, setClientsVersion] = useState(0)
-  const [searchFilters, setSearchFilters] = useState<SearchFilters>({
-    query: '',
-    location: 'Paris et alentours',
-    times: [],
-    diets: [],
-    distance: 5,
-    guests: 2,
-    maxPrice: 0,
-  })
+  const [searchFilters, setSearchFilters] = useState<SearchFilters>(defaultSearchFilters)
+  const [discoveryFilters, setDiscoveryFilters] = useState<SearchFilters>(defaultSearchFilters)
+  const [discoveryScope, setDiscoveryScope] = useState<'all' | 'restaurants' | 'members'>('all')
+  const [searchProfiles, setSearchProfiles] = useState(readSearchProfiles)
 
   // Démarrage : on récupère les vraies données du backend (restos + soldes + historique).
   // Si le serveur est éteint, l'app continue avec les données de démonstration.
   useEffect(() => {
     let cancelled = false
-    bootstrapBackend(demoRestaurants).then(async (state) => {
+    const start = async () => {
+      let loginFailed = false
+      if (startupLoginToken !== null) {
+        try {
+          await completeLogin(startupLoginToken)
+          if (!cancelled) window.location.reload()
+          return
+        } catch { loginFailed = true }
+      }
+      if (cancelled) return
+      const state = await bootstrapBackend(demoRestaurants)
       if (cancelled) return
       setBackend(state)
+      if (loginFailed) {
+        setRole('member'); setRoute({ name: 'settings' })
+        setToast('Lien invalide ou expiré — redemande un lien de connexion.')
+      }
+      if (!state.connected) return
       const history = await fetchHistory()
-      if (!cancelled && history.length) setHistoryItems(history)
+      if (!cancelled && (history.length || getAccount())) setHistoryItems(history)
       // FoodShare : les partages réels du membre (en attente, publiés, refusés)
       const mineShares = await fetchMyShares()
       if (!cancelled && mineShares?.length) {
@@ -89,9 +113,21 @@ function App() {
           return fresh.length ? [...fresh, ...current] : current
         })
       }
-    })
+    }
+    void start()
     return () => {
       cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    const expired = () => window.location.reload()
+    window.addEventListener('fidelity:session-expired', expired)
+    const account = getAccount()
+    const timer = account ? window.setInterval(() => { if (!getAccount()) expired() }, 30_000) : undefined
+    return () => {
+      window.removeEventListener('fidelity:session-expired', expired)
+      if (timer !== undefined) window.clearInterval(timer)
     }
   }, [])
 
@@ -99,7 +135,7 @@ function App() {
   const [customRestaurants, setCustomRestaurants] = useState<Record<string, Restaurant>>({})
   const [myRestaurants, setMyRestaurants] = useState<string[]>(['amina', 'braise'])
   const [activeRestoId, setActiveRestoId] = useState('amina')
-  const [drafts, setDrafts] = useState<Record<string, RestoDraft>>({ amina: makeDraft(baseAmina) })
+  const [drafts, setDrafts] = useState<Record<string, RestoDraft>>({})
 
   // Espace restaurateur : clients réels du restaurant actif
   useEffect(() => {
@@ -125,12 +161,25 @@ function App() {
     })
   }, [backend, role, activeRestoId])
 
-  const baseRestaurant = (id: string) => customRestaurants[id] ?? backend?.restaurants[id] ?? getRestaurant(id)
+  const baseRestaurant = (id: string): Restaurant => {
+    const restaurant = { ...(customRestaurants[id] ?? backend?.restaurants[id] ?? getRestaurant(id)), ...searchProfiles[id] }
+    return restaurant.openingHours ? { ...restaurant,
+      hours: restaurant.openingHours.filter((day) => day.intervals.length).map((day) => `${WEEK_DAYS[day.day]} · ${day.intervals.map((period) => `${period.open}–${period.close}`).join(' / ')}`),
+    } : restaurant
+  }
 
   const getDraft = (id: string): RestoDraft => drafts[id] ?? makeDraft(baseRestaurant(id))
 
   const patchDraft = (id: string, patch: Partial<RestoDraft>) => {
     setDrafts((current) => ({ ...current, [id]: { ...(current[id] ?? makeDraft(baseRestaurant(id))), ...patch } }))
+    if (patch.profile) {
+      const parsed = searchProfileSchema.safeParse(patch.profile)
+      if (parsed.success) {
+        const next = { ...searchProfiles, [id]: parsed.data }
+        setSearchProfiles(next)
+        if (!saveSearchProfiles(next)) setToast('Le navigateur ne peut pas conserver ces critères après fermeture.')
+      }
+    }
   }
 
   const selectRestaurant = (id: string) => {
@@ -169,6 +218,7 @@ function App() {
             open: true,
             hours: ['Vendredi · 11:30–23:00'],
             diets: [],
+            foodTags: [], services: [], openingHours: [], avgPrice: 0, maxGuests: 0,
             menu: [],
             offers: [],
             loyalty: {
@@ -300,7 +350,7 @@ function App() {
     const restaurant = baseRestaurant(id)
     const draft = drafts[id]
     // Le solde réel du backend prime toujours sur les valeurs de démonstration
-    const balance = backend?.balances[id]
+    const balance = backend?.connected ? backend.balances[id] ?? 0 : undefined
     const withBalance = (input: Restaurant): Restaurant =>
       balance === undefined ? input : { ...input, loyalty: { ...input.loyalty, current: balance } }
     if (!draft) return withBalance(restaurant)
@@ -312,10 +362,16 @@ function App() {
       address: draft.profile.address,
       description: draft.profile.description,
       diets: draft.profile.diets,
-      hours: [`Vendredi · ${draft.profile.opening}–${draft.profile.closing}`, ...restaurant.hours.slice(1)],
       menu: draft.menu,
       loyalty: draft.loyalty,
       offers: draft.offers,
+      foodTags: draft.profile.foodTags,
+      services: draft.profile.services,
+      openingHours: draft.profile.openingHours,
+      avgPrice: draft.profile.avgPrice,
+      maxGuests: draft.profile.maxGuests,
+      hours: draft.profile.openingHours.filter((day) => day.intervals.length).map((day) =>
+        `${WEEK_DAYS[day.day]} · ${day.intervals.map((period) => `${period.open}–${period.close}`).join(' / ')}`),
     })
   }
 
@@ -323,9 +379,10 @@ function App() {
   const activeRestaurant = resolveRestaurant(activeRestoId)
 
   const resolvedRestaurants = useMemo(
-    () => ['amina', 'casa', 'miso', 'comptoir', 'rizrouge', 'braise', ...Object.keys(customRestaurants)].map((id) => resolveRestaurant(id)),
+    () => [...new Set([...(backend?.connected ? Object.keys(backend.restaurants) : demoRestaurants.map((restaurant) => restaurant.id)), ...Object.keys(customRestaurants)])]
+      .filter((id) => !archivedPlaces.has(id)).map((id) => resolveRestaurant(id)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [drafts, customRestaurants, backend],
+    [drafts, customRestaurants, backend, searchProfiles, archivedPlaces],
   )
 
   const go = (name: RouteName, params: Omit<Route, 'name'> = {}) => {
@@ -356,6 +413,40 @@ function App() {
     window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior })
   }
 
+  const hasCard = (id: string) => backend?.connected ? !!backend.memberships[id] : !!backend && localCards.has(id)
+
+  const addCard = async (id: string) => {
+    if (!backend) throw new Error('Vos cartes sont en cours de chargement. Réessayez dans un instant.')
+    if (hasCard(id) || addingCards.current.has(id)) return
+    addingCards.current.add(id)
+    setPendingCards(new Set(addingCards.current))
+    try {
+      if (backend.connected) {
+        setBackend(await addMyCard(id))
+      } else {
+        // Relire le stockage pour conserver aussi les ajouts d'un autre onglet.
+        const next = readMyCards([...localCards])
+        next.add(id)
+        try { saveMyCards(next) } catch { throw new Error('Le navigateur ne peut pas enregistrer cette carte. Autorisez le stockage puis réessayez.') }
+        setLocalCards(next)
+      }
+      setToast('Carte ajoutée à « Mes cartes »')
+    } catch (error) {
+      if (error instanceof TypeError) throw new Error('Connexion au serveur impossible. Réessayez pour ajouter votre carte.')
+      throw error
+    } finally {
+      addingCards.current.delete(id)
+      setPendingCards(new Set(addingCards.current))
+    }
+  }
+
+  const reloadCards = async () => {
+    setRefreshingCards(true)
+    try { setBackend(await refreshMyCards()) }
+    catch { setToast('Vos cartes sont indisponibles pour le moment. Réessayez plus tard.') }
+    finally { setRefreshingCards(false) }
+  }
+
   const common: CommonProps = {
     go,
     goBack,
@@ -370,6 +461,12 @@ function App() {
     },
     resolveRestaurant,
     notify: setToast,
+    hasCard,
+    addCard,
+    isAddingCard: (id) => pendingCards.has(id),
+    cardsLoading: !backend || refreshingCards,
+    cardsUnavailable: !!backend?.connected && !backend.membershipsReady,
+    reloadCards,
     switchRole,
     sharedPosts,
     publishShare,
@@ -386,10 +483,10 @@ function App() {
       page = <TimePage {...common} filters={searchFilters} setFilters={setSearchFilters} />
       break
     case 'results':
-      page = <ResultsPage {...common} filters={searchFilters} restaurants={resolvedRestaurants} />
+      page = <ResultsPage {...common} filters={searchFilters} setFilters={setSearchFilters} restaurants={resolvedRestaurants} />
       break
     case 'discovery':
-      page = <DiscoveryPage {...common} restaurants={resolvedRestaurants} />
+      page = <DiscoveryPage {...common} restaurants={resolvedRestaurants} filters={discoveryFilters} setFilters={setDiscoveryFilters} scope={discoveryScope} setScope={setDiscoveryScope} />
       break
     case 'story':
       page = <StoryPage {...common} storyIndex={route.storyIndex || 0} />
@@ -481,7 +578,7 @@ function App() {
       page = <QrPosterPage {...common} restaurant={resolveRestaurant(route.restaurantId || 'amina')} />
       break
     default:
-      page = <HomePage {...common} restaurants={resolvedRestaurants} backendConnected={backend?.connected ?? false} />
+      page = <HomePage {...common} restaurants={resolvedRestaurants} backendConnected={backend?.connected ?? false} filters={searchFilters} setFilters={setSearchFilters} />
   }
 
   if (backend === null) {

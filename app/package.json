@@ -7,6 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test:search": "node --experimental-strip-types --test scripts/test-search.mjs",
+    "test:cards": "node --experimental-strip-types --test scripts/test-cards.mjs",
+    "test:account": "node scripts/test-account.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

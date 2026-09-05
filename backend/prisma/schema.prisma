@@ -55,6 +55,14 @@ enum PostStatus {
   REJECTED      // refusé — visible uniquement sur le profil de l'auteur
 }
 
+// Empreinte uniquement : le lien lui-même n'est jamais conservé en base.
+model UsedMagicLink {
+  tokenHash String   @id
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
@@ -86,6 +94,10 @@ model Restaurant {
   siret       String?
   status      RestaurantStatus @default(PENDING)
   cuisine     String
+  foodTags    String[]         @default([])
+  services    String[]         @default([])
+  avgPrice    Float            @default(0)
+  maxGuests   Int              @default(0)
   description String           @default("")
   address     String
   district    String           @default("")

@@ -5,15 +5,16 @@ import type { Loyalty, MenuItem, Offer, Restaurant, RewardTier } from '../data'
 import type { CommonProps } from '../nav'
 import { LoyaltyCard, Notice, Tabs } from '../components/kit'
 import { publishProfile, publishProgram } from '../lib/api'
+import { SearchProfileEditor } from '../components/SearchProfileEditor'
+import { searchProfileSchema } from '../lib/search-profile'
+import type { SearchProfile } from '../lib/search-profile'
 
-export interface ProfileDraft {
+export interface ProfileDraft extends SearchProfile {
   name: string
   cuisine: string
   district: string
   address: string
   description: string
-  opening: string
-  closing: string
   diets: string[]
   image: string
 }
@@ -46,10 +47,12 @@ export function ProfileEditorPage({ go, draft, setDraft, menu, setMenu, offers =
 
   const publish = async () => {
     if (!restaurantId || publishing) return
+    if (!searchProfileSchema.safeParse(draft).success) { notify('Vérifiez le budget, la capacité et les horaires avant de publier.'); return }
     setPublishing(true)
     const ok = await publishProfile(restaurantId, draft, menu)
     setPublishing(false)
-    notify(ok ? 'Profil et menu publiés sur le serveur ✅' : 'Publication impossible — serveur hors ligne, brouillon conservé en local')
+    notify(ok === 'unsupported' ? 'La synchronisation des critères nécessite la mise à jour du serveur. Ils restent conservés sur cet appareil.'
+      : ok ? 'Profil, critères de recherche et menu publiés ✅' : 'Publication impossible — serveur hors ligne, brouillon conservé en local')
   }
 
   const updateMenu = (field: keyof MenuItem, value: string) => {
@@ -114,10 +117,6 @@ export function ProfileEditorPage({ go, draft, setDraft, menu, setMenu, offers =
         </button>
       </div>
 
-      <Notice title="Mode démonstration">
-        Données de démonstration locales — aucune publication, caméra ou analyse réelle.
-      </Notice>
-
       <section className="form-section">
         <h2 style={{ margin: 0 }}>Compte restaurant</h2>
         <label>
@@ -141,25 +140,18 @@ export function ProfileEditorPage({ go, draft, setDraft, menu, setMenu, offers =
           <textarea rows={4} value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} />
         </label>
 
-        <h3 style={{ margin: '8px 0 0' }}>Horaires du premier service</h3>
-        <label>
-          Ouverture (HH:MM)
-          <input type="time" value={draft.opening} onChange={(event) => setDraft({ ...draft, opening: event.target.value })} />
-        </label>
-        <label>
-          Fermeture (HH:MM)
-          <input type="time" value={draft.closing} onChange={(event) => setDraft({ ...draft, closing: event.target.value })} />
-        </label>
-
         <label>Régimes proposés</label>
+        <p className="muted search-help">Déclarez uniquement les options que vous proposez réellement. Elles déterminent les filtres Végé, Végan, Halal et Sans gluten.</p>
         <div className="chips">
           {DIET_OPTIONS.map((diet) => (
-            <button key={diet} type="button" className={draft.diets.includes(diet) ? 'selected' : ''} onClick={() => toggleDiet(diet)}>
+            <button key={diet} type="button" aria-pressed={draft.diets.includes(diet)} className={draft.diets.includes(diet) ? 'selected' : ''} onClick={() => toggleDiet(diet)}>
               {draft.diets.includes(diet) && <Check size={15} />} {diet}
             </button>
           ))}
         </div>
       </section>
+
+      <SearchProfileEditor value={draft} onChange={(profile) => setDraft({ ...draft, ...profile })} />
 
       <section className="gallery-draft">
         <h3 style={{ margin: 0 }}>Galerie — aperçu du brouillon</h3>

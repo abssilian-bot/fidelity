@@ -2,6 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
+.card-actions { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+.card-owned { display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--green); font-size: 13px; margin: 0; }
+.card-action-hint { color: var(--muted-soft); font-size: 12px; text-align: center; margin: 0; }
+.card-action-error { color: #a22d19; font-size: 13px; line-height: 1.5; margin: 0; }
+.wallet-button { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 12px 16px; min-height: 58px; background: #191919; color: #fff; border: 1px solid #191919; border-radius: 14px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.wallet-button:hover { background: #333; }
+.wallet-button:focus-visible { outline: 3px solid var(--orange); outline-offset: 3px; }
+.wallet-button span { text-align: left; }
+.wallet-button small { display: block; margin-top: 2px; color: #c8c8c8; font-size: 11px; font-weight: 400; }
+.wallet-dialog { width: min(390px, calc(100vw - 32px)); gap: 18px; border-radius: 24px; padding: 26px; }
+.wallet-dialog [data-slot="dialog-title"] { font-size: 21px; line-height: 1.3; }
+.wallet-dialog [data-slot="dialog-description"] { line-height: 1.7; }
+.wallet-dialog-icon { width: 58px; height: 58px; display: grid; place-items: center; color: #fff; background: #191919; border-radius: 16px; }
+
 @layer base {
   :root {
     --background: 33 55% 96%;
@@ -151,6 +165,53 @@ h3 { font-size: 15px; font-weight: 600; }
 }
 .microcopy { font-size: 12.5px; color: var(--muted-soft); margin-top: 10px; }
 
+/* ---------- Recherche partagée : saisie, bulles et critères ---------- */
+.search-box { display: flex; align-items: center; gap: 9px; min-height: 56px; padding: 7px 8px 7px 16px; border: 1.5px solid var(--line); border-radius: 28px; background: var(--surface); color: var(--muted-soft); }
+.search-box:focus-within { border-color: var(--orange); box-shadow: 0 0 0 3px #c4410f12; }
+.search-box > svg { flex-shrink: 0; }
+.search-box input { width: 100%; min-width: 0; padding: 7px 0; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 14px; }
+.search-box input::placeholder { color: var(--muted-soft); }
+.search-box input::-webkit-search-cancel-button { display: none; }
+.search-clear { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 34px; min-height: 36px; padding: 0; border: 0; background: transparent; color: var(--muted-soft); cursor: pointer; border-radius: 50%; }
+.search-filter-button { position: relative; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 40px; height: 40px; border: 0; border-radius: 50%; background: #f6eee3; color: var(--brown); cursor: pointer; }
+.search-filter-button.has-filters { background: var(--orange); color: white; }
+.search-filter-button > span { position: absolute; right: -3px; top: -4px; min-width: 18px; height: 18px; border-radius: 10px; padding: 0 3px; font-size: 10px; font-weight: 600; color: white; background: var(--brown); border: 2px solid white; }
+.quick-filters { display: flex; gap: 7px; overflow-x: auto; scrollbar-width: thin; scrollbar-color: #dfcbb7 transparent; padding: 12px 0 8px; margin-right: -20px; padding-right: 20px; }
+.filter-bubble { display: inline-flex; align-items: center; justify-content: center; gap: 5px; flex-shrink: 0; min-height: 38px; padding: 8px 15px; white-space: nowrap; border: 1px solid #ddc9b6; border-radius: 999px; color: #654a37; background: #fffaf3; font-size: 13px; font-weight: 500; cursor: pointer; transition: background .15s, color .15s; }
+.filter-bubble:hover { border-color: var(--orange); }
+.filter-bubble.selected { background: var(--orange); color: white; border-color: var(--orange); }
+.filter-bubble:focus-visible, .search-box button:focus-visible, .search-scopes button:focus-visible, .chips button:focus-visible { outline: 2px solid var(--orange); outline-offset: 3px; }
+.search-summary { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin: 18px 0 10px; }
+.search-summary p { margin: 0; font-size: 14px; color: var(--brown); overflow-wrap: anywhere; }
+.search-summary .text-link { flex-shrink: 0; font-size: 12px; }
+.page label.search-sort { display: flex; flex-direction: row; align-items: center; justify-content: flex-end; gap: 7px; margin: 0 0 16px; font-size: 12px; color: var(--muted-soft); }
+.page .search-sort select { width: auto; min-width: 0; font: inherit; color: var(--brown); background: transparent; border: 0; padding: 7px 4px; cursor: pointer; }
+.search-scopes { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: 12px 0 18px; }
+.search-scopes button { flex: 1; min-height: 42px; padding: 8px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--muted-soft); font-size: 13px; cursor: pointer; }
+.search-scopes button.active { color: var(--orange); border-bottom-color: var(--orange); font-weight: 600; }
+.search-filter-page .form-section h2, .discovery-filter-panel .form-section h2, .search-profile-editor h2 { margin: 0; }
+.search-help { font-size: 13px; line-height: 1.5; margin: 0; }
+.search-filter-footer { position: sticky; bottom: 0; margin: 25px -20px -40px; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid var(--line); background: #fbf5edf5; backdrop-filter: blur(8px); z-index: 5; }
+.time-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
+.time-options button { display: flex; flex-direction: column; gap: 4px; align-items: stretch; text-align: left; background: white; border: 1.5px solid var(--line); border-radius: 16px; padding: 13px 15px; cursor: pointer; }
+.time-options button.selected { background: #fbe9dc; border-color: var(--orange); }
+.time-options button > span { display: flex; align-items: center; justify-content: space-between; font-size: 15px; }
+.time-options small { font-size: 12px; color: var(--muted-soft); }
+.chips button:disabled { opacity: .45; cursor: not-allowed; }
+.search-profile-numbers { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.search-profile-numbers label { min-width: 0; }
+.search-profile-numbers input { width: 100%; }
+.weekly-hours { display: flex; flex-direction: column; gap: 10px; }
+.opening-day { padding: 12px; border: 1px solid var(--line); border-radius: 15px; background: #fffaf3; }
+.form-section .opening-day-toggle { display: flex; flex-direction: row; align-items: center; gap: 9px; font-size: 14px; }
+.form-section .opening-day-toggle input { width: 17px; height: 17px; accent-color: var(--orange); }
+.opening-day > small { display: block; margin: 5px 0 0 26px; font-size: 12px; }
+.opening-period { display: flex; align-items: center; gap: 7px; margin-top: 10px; font-size: 12px; }
+.opening-period label { flex: 1; min-width: 0; }
+.form-section .opening-period input { width: 100%; min-width: 0; padding: 8px 5px; font-size: 13px; }
+.opening-day > .text-link { margin-top: 8px; font-size: 12px; }
+.discovery-filter-panel { padding: 0 14px 16px; border: 1px solid var(--line); border-radius: 18px; margin-bottom: 18px; background: #fffaf3; }
+
 /* ---------- Cartes restaurant ---------- */
 .restaurant-card {
   position: relative; background: var(--surface); border: 1px solid var(--line);
@@ -226,6 +287,13 @@ h3 { font-size: 15px; font-weight: 600; }
 
 /* ---------- Formulaires ---------- */
 .form-section { display: flex; flex-direction: column; gap: 12px; margin-top: 22px; }
+.account-section { padding: 20px 16px; border: 1px solid var(--line); border-radius: 20px; background: #fffaf4; }
+.account-form { display: flex; flex-direction: column; gap: 14px; }
+.account-status { margin: 0; color: var(--green); font-size: 13px; line-height: 1.6; }
+.account-identity { cursor: default; }
+.account-identity > span:nth-child(2) { min-width: 0; overflow-wrap: anywhere; }
+.account-identity > span:first-child { flex-shrink: 0; font-size: 19px; font-weight: 600; }
+.account-identity > svg { flex-shrink: 0; }
 label { display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; font-weight: 500; color: var(--ink); }
 input, textarea, select {
   background: var(--surface); border: 1.5px solid var(--line); border-radius: 14px;
