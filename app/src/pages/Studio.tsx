@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Check, CreditCard, Edit3, Gift, Plus, Settings2, Trash2 } from 'lucide-react'
 import { loyaltyRule } from '../data'
-import type { Loyalty, MenuItem, Restaurant, RewardTier } from '../data'
+import type { Loyalty, MenuItem, Offer, Restaurant, RewardTier } from '../data'
 import type { CommonProps } from '../nav'
 import { LoyaltyCard, Notice, Tabs } from '../components/kit'
 import { publishProfile, publishProgram } from '../lib/api'
@@ -20,16 +20,28 @@ export interface ProfileDraft {
 
 const DIET_OPTIONS = ['Halal', 'Végétarien', 'Végan', 'Sans gluten']
 
-export function ProfileEditorPage({ go, draft, setDraft, menu, setMenu, notify, withNav = false, restaurantId }: CommonProps & {
+/** Types d'offres proposés au restaurateur — affichés dans « Infos & promos » côté client. */
+const OFFER_KIND_OPTIONS: Array<[Offer['kind'], string]> = [
+  ['happyhour', 'Happy hour'],
+  ['duo', '1 + 1 offert'],
+  ['discount', 'Promo'],
+  ['special', 'Offre du moment'],
+]
+const OFFER_KIND_LABELS: Record<Offer['kind'], string> = Object.fromEntries(OFFER_KIND_OPTIONS) as Record<Offer['kind'], string>
+
+export function ProfileEditorPage({ go, draft, setDraft, menu, setMenu, offers = [], setOffers, notify, withNav = false, restaurantId }: CommonProps & {
   draft: ProfileDraft
   setDraft: (draft: ProfileDraft) => void
   menu: MenuItem[]
   setMenu: (menu: MenuItem[]) => void
+  offers?: Offer[]
+  setOffers?: (offers: Offer[]) => void
   withNav?: boolean
   restaurantId?: string
 }) {
   const [selectedItem, setSelectedItem] = useState(0)
   const [selectedPhoto, setSelectedPhoto] = useState(0)
+  const [selectedOffer, setSelectedOffer] = useState(0)
   const [publishing, setPublishing] = useState(false)
 
   const publish = async () => {
@@ -61,6 +73,24 @@ export function ProfileEditorPage({ go, draft, setDraft, menu, setMenu, notify, 
       ...draft,
       diets: draft.diets.includes(diet) ? draft.diets.filter((item) => item !== diet) : [...draft.diets, diet],
     })
+  }
+
+  // Offres & promotions — ponctuelles, indépendantes du programme fidélité
+  const updateOffer = (field: keyof Offer, value: string) => {
+    setOffers?.(offers.map((offer, index) => (index === selectedOffer ? { ...offer, [field]: value } : offer)))
+  }
+  const addOffer = () => {
+    const offer: Offer = { id: Date.now(), kind: 'happyhour', title: 'Nouvelle offre', detail: '', schedule: '' }
+    setOffers?.([...offers, offer])
+    setSelectedOffer(offers.length)
+    notify('Offre ajoutée au brouillon — complétez-la ci-dessous')
+  }
+  const removeOffer = () => {
+    if (!offers[selectedOffer]) return
+    const removed = offers[selectedOffer].title
+    setOffers?.(offers.filter((_, index) => index !== selectedOffer))
+    setSelectedOffer((current) => Math.max(0, Math.min(current, offers.length - 2)))
+    notify(`« ${removed} » retirée des offres`)
   }
 
   return (
@@ -206,6 +236,85 @@ export function ProfileEditorPage({ go, draft, setDraft, menu, setMenu, notify, 
             </button>
             <button className="danger-button full" type="button" onClick={removeDish}>
               <Trash2 size={16} /> Retirer ce plat
+            </button>
+          </div>
+        )}
+      </section>
+
+      <section className="menu-editor">
+        <div className="menu-editor-header">
+          <div>
+            <h2 style={{ margin: 0 }}>Offres & promotions</h2>
+            <p className="muted" style={{ margin: 0, fontSize: 13.5 }}>
+              Happy hour, 1 acheté = 1 offert, promo du moment… Visibles dans l’onglet « Infos & promos » de votre
+              page — indépendantes du programme fidélité.
+            </p>
+          </div>
+          <button className="outline-button" type="button" onClick={addOffer}>
+            <Plus size={16} /> Ajouter une offre
+          </button>
+        </div>
+        <div className="editable-menu-list">
+          {offers.map((offer, index) => (
+            <button key={offer.id} type="button" className={selectedOffer === index ? 'active' : ''} onClick={() => setSelectedOffer(index)}>
+              <span>
+                <strong style={{ fontSize: 14.5, display: 'block' }}>{offer.title}</strong>
+                <small>
+                  {OFFER_KIND_LABELS[offer.kind]}
+                  {offer.schedule ? ` · ${offer.schedule}` : ''}
+                </small>
+              </span>
+              <Edit3 size={18} color="var(--muted-soft)" />
+            </button>
+          ))}
+          {!offers.length && (
+            <p className="muted" style={{ fontSize: 13.5, margin: '4px 0 0' }}>
+              Aucune offre pour le moment — ajoutez votre première promotion avec le bouton ci-dessus.
+            </p>
+          )}
+        </div>
+        {offers[selectedOffer] && (
+          <div className="selected-dish">
+            <h3 style={{ margin: 0 }}>Offre sélectionnée</h3>
+            <label>Type d’offre</label>
+            <div className="chips">
+              {OFFER_KIND_OPTIONS.map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={offers[selectedOffer].kind === value ? 'selected' : ''}
+                  onClick={() => updateOffer('kind', value)}
+                >
+                  {offers[selectedOffer].kind === value && <Check size={15} />} {label}
+                </button>
+              ))}
+            </div>
+            <label>
+              Titre de l’offre
+              <input value={offers[selectedOffer].title} onChange={(event) => updateOffer('title', event.target.value)} />
+            </label>
+            <label>
+              Détail et conditions
+              <textarea
+                rows={2}
+                placeholder="Ex. : en salle uniquement, hors boissons…"
+                value={offers[selectedOffer].detail}
+                onChange={(event) => updateOffer('detail', event.target.value)}
+              />
+            </label>
+            <label>
+              Jours et horaires (affiché aux clients)
+              <input
+                placeholder="Ex. : Lun–Ven · 17h–19h"
+                value={offers[selectedOffer].schedule}
+                onChange={(event) => updateOffer('schedule', event.target.value)}
+              />
+            </label>
+            <button className="outline-button full" type="button" onClick={() => notify('Offre enregistrée dans l’aperçu local')}>
+              Enregistrer dans l’aperçu local
+            </button>
+            <button className="danger-button full" type="button" onClick={removeOffer}>
+              <Trash2 size={16} /> Retirer cette offre
             </button>
           </div>
         )}

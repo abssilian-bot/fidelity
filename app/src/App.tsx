@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Compass, CreditCard, Home, LayoutDashboard, Settings, Share2, Store } from 'lucide-react'
 import { getRestaurant, pendingSharesSeed, restaurants as demoRestaurants, setHistoryItems, setProgramClients, setRecentScans, userReviews } from './data'
-import type { Loyalty, MenuItem, Restaurant, UserReview } from './data'
+import type { Loyalty, MenuItem, Offer, Restaurant, UserReview } from './data'
 import { bootstrapBackend, decideShareApi, fetchClients, fetchHistory, fetchMyShares, fetchPendingShares, publishShareApi } from './lib/api'
 import type { BackendState } from './lib/api'
 import type { AppRole, CommonProps, Route, RouteName, SearchFilters, Share } from './nav'
@@ -32,6 +32,7 @@ interface RestoDraft {
   profile: ProfileDraft
   menu: MenuItem[]
   loyalty: Loyalty
+  offers: Offer[]
 }
 
 const makeDraft = (restaurant: Restaurant): RestoDraft => ({
@@ -48,6 +49,7 @@ const makeDraft = (restaurant: Restaurant): RestoDraft => ({
   },
   menu: restaurant.menu.map((item) => ({ ...item })),
   loyalty: { ...restaurant.loyalty },
+  offers: (restaurant.offers ?? []).map((offer) => ({ ...offer })),
 })
 
 function App() {
@@ -168,6 +170,7 @@ function App() {
             hours: ['Vendredi · 11:30–23:00'],
             diets: [],
             menu: [],
+            offers: [],
             loyalty: {
               type: 'stamps',
               title: 'Mon programme',
@@ -312,6 +315,7 @@ function App() {
       hours: [`Vendredi · ${draft.profile.opening}–${draft.profile.closing}`, ...restaurant.hours.slice(1)],
       menu: draft.menu,
       loyalty: draft.loyalty,
+      offers: draft.offers,
     })
   }
 
@@ -439,6 +443,8 @@ function App() {
           setDraft={(profile) => patchDraft(activeRestoId, { profile })}
           menu={activeDraft.menu}
           setMenu={(menu) => patchDraft(activeRestoId, { menu })}
+          offers={activeDraft.offers}
+          setOffers={(offers) => patchDraft(activeRestoId, { offers })}
         />
       )
       break

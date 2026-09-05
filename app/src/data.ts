@@ -46,6 +46,20 @@ export interface Review {
   text: string
 }
 
+export interface Offer {
+  id: number
+  /** happyhour = happy hour, duo = 1 acheté = 1 offert, discount = promo, special = offre du moment */
+  kind: 'happyhour' | 'duo' | 'discount' | 'special'
+  title: string
+  detail: string
+  /** Affichage brut, ex. « Lun–Ven · 17h–19h » */
+  schedule: string
+  /** Badge « En ce moment » : jours (0 = dimanche) + plage horaire. Optionnel. */
+  days?: number[]
+  startHour?: number
+  endHour?: number
+}
+
 export interface Restaurant {
   id: string
   name: string
@@ -66,6 +80,8 @@ export interface Restaurant {
   loyalty: Loyalty
   menu: MenuItem[]
   reviews: Review[]
+  /** Offres ponctuelles (happy hour, 1+1…) — DISTINCTES du programme de fidélité. */
+  offers: Offer[]
 }
 
 export interface FeedPost {
@@ -140,6 +156,28 @@ export const restaurants: Restaurant[] = [
       { author: 'Sarah L.', rating: '5/5', text: 'Une cuisine généreuse et un accueil qui donne envie de revenir.' },
       { author: 'Mehdi B.', rating: '5/5', text: 'Le couscous du vendredi est devenu un rituel. Carte de fidélité très simple à utiliser.' },
     ],
+    offers: [
+      {
+        id: 1,
+        kind: 'happyhour',
+        title: 'Thé & douceurs à −30 %',
+        detail: 'Thé à la menthe et cornes de gazelle, en salle uniquement.',
+        schedule: 'Lun–Ven · 15h–18h',
+        days: [1, 2, 3, 4, 5],
+        startHour: 15,
+        endHour: 18,
+      },
+      {
+        id: 2,
+        kind: 'duo',
+        title: '1 couscous acheté = 1 dessert offert',
+        detail: 'Tous les vendredis soir, sur présentation de votre carte Fidelity.',
+        schedule: 'Ven · 19h–23h',
+        days: [5],
+        startHour: 19,
+        endHour: 23,
+      },
+    ],
   },
   {
     id: 'casa',
@@ -176,6 +214,26 @@ export const restaurants: Restaurant[] = [
     ],
     reviews: [
       { author: 'Léa P.', rating: '4/5', text: 'Salsa verde excellente, salle un peu bruyante le samedi.' },
+    ],
+    offers: [
+      {
+        id: 1,
+        kind: 'happyhour',
+        title: 'Happy hour tacos',
+        detail: 'Le taco du jour à 9 € au lieu de 14 €, au comptoir.',
+        schedule: 'Mar–Jeu · 17h–19h',
+        days: [2, 3, 4],
+        startHour: 17,
+        endHour: 19,
+      },
+      {
+        id: 2,
+        kind: 'duo',
+        title: '1 quesadilla achetée = 1 offerte',
+        detail: 'Tous les mardis, à table ou à emporter.',
+        schedule: 'Mardi · toute la journée',
+        days: [2],
+      },
     ],
   },
   {
@@ -216,6 +274,18 @@ export const restaurants: Restaurant[] = [
     reviews: [
       { author: 'Eliott M.', rating: '5/5', text: 'Un bouillon végétal délicat et les options végétales sont très claires.' },
     ],
+    offers: [
+      {
+        id: 1,
+        kind: 'discount',
+        title: 'Menu midi à −20 %',
+        detail: 'Sur la formule du midi, en semaine, dans la limite des places de l’atelier.',
+        schedule: 'Lun–Ven · 12h–14h',
+        days: [1, 2, 3, 4, 5],
+        startHour: 12,
+        endHour: 14,
+      },
+    ],
   },
   {
     id: 'comptoir',
@@ -252,6 +322,18 @@ export const restaurants: Restaurant[] = [
       { name: 'Granola maison', description: 'Yaourt, fruits de saison et miel.', price: '9,50 €' },
     ],
     reviews: [],
+    offers: [
+      {
+        id: 1,
+        kind: 'discount',
+        title: 'Grandes tablées : −15 % dès 6 personnes',
+        detail: 'Sur l’ensemble des assiettes, le week-end, pour les tables de 6 et plus.',
+        schedule: 'Sam–Dim · 10h–15h',
+        days: [0, 6],
+        startHour: 10,
+        endHour: 15,
+      },
+    ],
   },
   {
     id: 'rizrouge',
@@ -288,6 +370,18 @@ export const restaurants: Restaurant[] = [
       { name: 'Bò bún maison', description: 'Bœuf mariné, vermicelles et cacahuètes.', price: '15,50 €' },
     ],
     reviews: [],
+    offers: [
+      {
+        id: 1,
+        kind: 'special',
+        title: 'Bò bún du marché à 12 €',
+        detail: 'Tous les midis, jusqu’à épuisement du plat du marché.',
+        schedule: 'Lun–Sam · 12h–14h30',
+        days: [1, 2, 3, 4, 5, 6],
+        startHour: 12,
+        endHour: 14.5,
+      },
+    ],
   },
   {
     id: 'braise',
@@ -323,6 +417,18 @@ export const restaurants: Restaurant[] = [
       { name: 'Aubergine braisée', description: 'Yaourt citronné, herbes et noisettes.', price: '15,00 €' },
     ],
     reviews: [],
+    offers: [
+      {
+        id: 1,
+        kind: 'happyhour',
+        title: 'Happy hour au feu',
+        detail: 'Planches braisées à −25 % en début de soirée, au comptoir.',
+        schedule: 'Mer–Sam · 18h–20h',
+        days: [3, 4, 5, 6],
+        startHour: 18,
+        endHour: 20,
+      },
+    ],
   },
 ]
 

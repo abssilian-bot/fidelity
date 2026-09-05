@@ -1,9 +1,32 @@
 import { useState } from 'react'
-import { Check, Clock3, CreditCard, Gift, Heart, Info, MapPin, Navigation, Share2, Star } from 'lucide-react'
-import type { Restaurant } from '../data'
+import { Check, Clock3, CreditCard, Gift, Heart, Info, MapPin, Navigation, Percent, Share2, Sparkles, Star } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
+import type { Offer, Restaurant } from '../data'
 import { userVisits } from '../data'
 import type { CommonProps } from '../nav'
 import { HeartButton, LoyaltyCard, Tabs } from '../components/kit'
+
+/** Offres ponctuelles — distinctes du programme de fidélité. */
+const OFFER_LABELS: Record<Offer['kind'], string> = {
+  happyhour: 'Happy hour',
+  duo: '1 + 1 offert',
+  discount: 'Promo',
+  special: 'Offre du moment',
+}
+const OFFER_ICONS: Record<Offer['kind'], LucideIcon> = {
+  happyhour: Clock3,
+  duo: Gift,
+  discount: Percent,
+  special: Sparkles,
+}
+
+/** Badge « En ce moment » quand la plage jours/horaires de l'offre couvre l'instant présent. */
+const offerIsLive = (offer: Offer) => {
+  if (!offer.days || offer.startHour === undefined || offer.endHour === undefined) return false
+  const now = new Date()
+  const hour = now.getHours() + now.getMinutes() / 60
+  return offer.days.includes(now.getDay()) && hour >= offer.startHour && hour < offer.endHour
+}
 
 export function RestaurantPage({ go, restaurant, favorites, toggleFavorite, sharedPosts = [], myReviews = [] }: CommonProps & { restaurant: Restaurant }) {
   const [activeTab, setActiveTab] = useState('Publications')
@@ -56,7 +79,7 @@ export function RestaurantPage({ go, restaurant, favorites, toggleFavorite, shar
         <Navigation size={19} fill="currentColor" />
       </button>
 
-      <Tabs values={['Publications', 'Menu', 'Informations']} active={activeTab} onChange={setActiveTab} />
+      <Tabs values={['Publications', 'Menu', 'Infos & promos']} active={activeTab} onChange={setActiveTab} />
 
       {activeTab === 'Publications' && (
         <section className="restaurant-tab-content">
@@ -106,9 +129,37 @@ export function RestaurantPage({ go, restaurant, favorites, toggleFavorite, shar
         </section>
       )}
 
-      {activeTab === 'Informations' && (
+      {activeTab === 'Infos & promos' && (
         <section className="restaurant-tab-content info-section">
-          <h2 style={{ margin: 0 }}>À propos</h2>
+          <h2 style={{ margin: 0 }}>Promotions</h2>
+          <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+            Offres ponctuelles du restaurant — indépendantes de votre carte Fidelity.
+          </p>
+          {restaurant.offers.length === 0 && (
+            <p className="muted" style={{ margin: 0, fontSize: 13.5 }}>
+              Aucune offre en ce moment — revenez bientôt.
+            </p>
+          )}
+          {restaurant.offers.map((offer) => {
+            const OfferIcon = OFFER_ICONS[offer.kind]
+            return (
+              <article className="offer-card" key={offer.id}>
+                <div className="offer-head">
+                  <span className={`offer-badge ${offer.kind}`}>
+                    <OfferIcon size={12} strokeWidth={2.4} /> {OFFER_LABELS[offer.kind]}
+                  </span>
+                  {offerIsLive(offer) && <span className="offer-live">En ce moment</span>}
+                </div>
+                <strong>{offer.title}</strong>
+                <p>{offer.detail}</p>
+                <small className="offer-schedule">
+                  <Clock3 size={13} /> {offer.schedule}
+                </small>
+              </article>
+            )
+          })}
+
+          <h2 style={{ margin: '14px 0 0' }}>À propos</h2>
           <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.55 }}>{restaurant.description}</p>
           <div className="hours">
             <Clock3 size={18} />

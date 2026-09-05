@@ -443,6 +443,37 @@ textarea { resize: vertical; }
 .review b { color: var(--orange); }
 .review p { font-size: 14px; color: var(--ink); margin: 0; line-height: 1.5; }
 
+/* ---------- Offres & promotions (distinctes du programme fidélité) ---------- */
+.offer-card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.offer-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.offer-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  border-radius: 999px; padding: 4px 10px;
+  background: #f6e8d4; color: var(--brown);
+}
+.offer-badge.happyhour { background: #fde8d7; color: var(--orange-dark); }
+.offer-badge.duo { background: #e8f3e4; color: #3d6b35; }
+.offer-badge.discount { background: #f6e8d4; color: var(--brown); }
+.offer-badge.special { background: #efe6f7; color: #6b3fa0; }
+.offer-live {
+  font-size: 11.5px; font-weight: 600; color: #3d6b35;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.offer-live::before {
+  content: ''; width: 7px; height: 7px; border-radius: 50%; background: #55a04a;
+}
+.offer-card > strong { font-size: 15px; }
+.offer-card > p { font-size: 13.5px; color: var(--muted-soft); margin: 0; line-height: 1.45; }
+.offer-schedule {
+  display: inline-flex; align-items: center; gap: 6px;
+  color: var(--muted-soft); font-size: 12.5px;
+}
+.offer-schedule svg { color: var(--orange); }
+
 /* ---------- Carte fidélité — design V1 validé ---------- */
 .loyalty-card {
   border-radius: 26px; padding: 22px;

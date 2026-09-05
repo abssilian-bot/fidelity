@@ -1,0 +1,216 @@
+# 🚀 Migration ChatGPT — Fidelity (« On mange quoi »)
+
+> **À lire en premier.** Ce fichier explique comment transférer le projet dans ChatGPT.
+> Date de préparation : 5 septembre 2026.
+
+---
+
+## 1. Comment utiliser ce package dans ChatGPT
+
+Tu as **3 fichiers** à disposition :
+
+| Fichier | À quoi il sert | Comment l'utiliser dans ChatGPT |
+|---|---|---|
+| `FIDELITY-CODE-COMPLET.md` | **Tout le code source** du projet dans un seul fichier texte | Uploade-le en début de conversation (ou colle-le si l'upload échoue). ChatGPT aura ainsi tout le code sous les yeux. |
+| `fidelity-projet.zip` | Le projet complet prêt à décompresser (code + config + assets) | Pour récupérer le projet sur une autre machine. ChatGPT peut aussi l'ouvrir avec son interpréteur de code. |
+| `MIGRATION-CHATGPT.md` (ce fichier) | La passation : vision, architecture, état, roadmap | Lis-le toi, et uploade-le aussi dans ChatGPT : il sert de briefing. |
+
+**Message de démarrage conseillé à coller dans ChatGPT** (après upload des fichiers) :
+
+```
+Voici mon projet "Fidelity" : un réseau social de restauration dont le cœur est
+la carte de fidélité digitale. Le fichier MIGRATION-CHATGPT.md contient la
+passation complète, FIDELITY-CODE-COMPLET.md contient tout le code source
+(frontend React + backend Fastify/Prisma). Lis-les, confirme-moi que tu as
+compris l'architecture, et attends mes instructions.
+```
+
+---
+
+## 2. La vision
+
+Un **réseau social pour les restaurants** dont le cœur de métier est la **carte de fidélité digitale**
+(coches ou points, paliers de récompenses). La couche sociale (fil Discovery, stories, FoodShare)
+crée l'engagement et l'acquisition gratuite. Deux interfaces distinctes : **membre** (client) et
+**restaurateur** (dashboard, façade, FoodShare, établissements).
+
+Contrainte n°1 : **budget quasi nul** — tout repose sur des free tiers (Supabase, Render, Vercel).
+
+---
+
+## 3. Architecture
+
+```
+OnMangeQuoi/
+├── app/                    → FRONTEND : React 18 + TypeScript + Vite
+│   ├── src/App.tsx         → routeur maison (état React, pas de react-router)
+│   ├── src/nav.ts          → types de routes + props partagées (CommonProps)
+│   ├── src/data.ts         → données de démo (6 restos, membres, visites, avis)
+│   ├── src/lib/api.ts      → PONT front ↔ backend (repli démo si API éteinte)
+│   ├── src/pages/          → Home, Search, Discovery, Restaurant, Loyalty,
+│   │                         Settings, Member, Dashboard (resto), Studio, Share
+│   ├── src/components/kit.tsx → composants maison (LoyaltyCard, Tabs, etc.)
+│   └── src/components/ui/  → boilerplate shadcn INUTILISÉ (ignorer)
+│
+├── backend/                → BACKEND : Node + Fastify + Prisma + PostgreSQL (Supabase)
+│   ├── prisma/schema.prisma → 12 tables (le modèle de données complet)
+│   ├── prisma/seed.ts      → données de démo (6 restos + comptes)
+│   ├── src/server.ts       → entrée : CORS, sécurité, routes, front statique
+│   ├── src/lib/            → auth (Bearer), tokens, security (headers, rate limit)
+│   ├── src/routes/         → auth, restaurants, memberships, ledger, shares
+│   └── scripts/            → test-api.mjs (27 tests), test-shares.mjs (18 tests)
+│
+└── render.yaml             → déploiement Render (build front + backend, API sert le front)
+```
+
+**Principe clé du front** : l'app fonctionne TOUJOURS. Si l'API ne répond pas, elle bascule sur
+les données de démonstration (`data.ts`) sans rien casser. `api.ts` fusionne les vraies données
+backend avec la démo (correspondance slug backend ↔ id front dans `SLUG_TO_ID`).
+
+---
+
+## 4. État du projet (au 5 septembre 2026)
+
+### ✅ Terminé et testé
+
+- **Frontend complet** : accueil, recherche (filtres régimes/horaires/personnes/prix/distance),
+  Discovery (fil + stories + recherche d'utilisateurs), pages restaurant, cartes de fidélité
+  avec paliers, profil membre (visites, avis, restaurants likés), espace restaurateur
+  (Résumé/dashboard, Façade, FoodShare, Établissements avec franchises et suppression en 2 temps).
+- **Offres & promotions** : chaque restaurant a des offres (happy hour, 1 acheté = 1 offert,
+  promo, offre du moment) affichées dans l'onglet **« Infos & promos »** de sa page — section
+  « Promotions » en tête, **visuellement distincte du programme fidélité**, avec badge
+  « En ce moment » calculé selon jours/horaires. Éditeur complet côté restaurateur
+  (Façade → « Offres & promotions » : ajouter/modifier/retirer, enregistré en brouillon local).
+  ⚠️ Front/démo uniquement : pas encore de table `Offer` ni de routes backend.
+- **Backend complet** : auth par lien magique (mode dev), CRUD restaurants/menu/programme,
+  adhésions, ledger de points (scan commerçant, redeem, adjust), FoodShare de bout en bout.
+- **FoodShare connecté** : le membre publie photo + note + commentaire **uniquement s'il a déjà
+  commandé** (≥ 1 crédit EARN) → la note compte tout de suite (avis), la photo part en attente →
+  le restaurateur republie (crédit ledger FOODSHARE idempotent) ou refuse (visible uniquement
+  sur le profil du membre).
+- **45 tests automatisés** qui passent : `test-api.mjs` (27) + `test-shares.mjs` (18).
+- **Déploiement** : repo GitHub `abssilian-bot/fidelity`, Render build via `render.yaml`,
+  l'API sert le front compilé (app/dist puis backend/public en secours).
+
+### ⏳ Reste à faire (roadmap)
+
+1. Vérifier le déploiement Render en ligne (URL exacte à confirmer — `fidelity-api.onrender.com` répondait 404).
+2. **Brancher les offres au backend** : table `Offer` (restaurantId, kind, title, detail, schedule,
+   days, startHour, endHour) + routes CRUD propriétaire + publication depuis Façade, pour que les
+   offres soient réelles et synchronisées entre appareils (aujourd'hui : `data.ts` + brouillons locaux).
+3. Auth réelle : brancher Supabase Auth (envoi d'e-mails) à la place du magic-link dev.
+4. Upload de vraies photos (Supabase Storage) au lieu des 3 images de démo.
+5. Passes Wallet Apple/Google (phase 2 — compte Apple Developer 99 $/an).
+6. Scan QR commerçant avec caméra (jsQR) dans la PWA.
+7. Vérification SIRET via API Sirene (INSEE) à l'inscription restaurateur.
+8. Posts sponsorisés + abonnement restaurateur (monétisation, Stripe).
+9. PWA : manifest, service worker, push web.
+
+---
+
+## 5. Modèle de données (Prisma/PostgreSQL)
+
+12 tables : `User`, `Restaurant`, `MenuItem`, `LoyaltyProgram`, `Membership` (carte d'un membre
+chez un resto, `publicCode` = QR privé), `LedgerEntry` (**solde jamais stocké**, dérivé du ledger ;
+`balanceAfter` = cache transactionnel ; `idempotencyKey` unique anti-doublon), `RestaurantFavorite`,
+`Review` (1 avis par membre/resto), `Post` (posts restaurant + FoodShare avec `status`
+PENDING/PUBLISHED/REJECTED et `rating`), `Like`, `Comment`, `Follow`.
+
+Enums : `Role` (MEMBER/RESTAURANT/ADMIN), `RestaurantStatus`, `ProgramType` (STAMPS/POINTS),
+`CardStyle` (BRAISE/CREME/ENCRE), `EntryKind` (EARN/REDEEM/REFUND/ADJUST/FOODSHARE),
+`EntryStatus`, `PostStatus`.
+
+**Modèle front uniquement** (`app/src/data.ts`) : `Offer` { id, kind (`happyhour` | `duo` |
+`discount` | `special`), title, detail, schedule, days?, startHour?, endHour? } — offres et
+promotions du restaurant, distinctes du programme fidélité. Champ `offers: Offer[]` sur
+`Restaurant`. À migrer en table Prisma (voir roadmap n°2).
+
+**Règles d'or du ledger** : aucun point sans scan commerçant ; idempotence par clé unique
+(un rejeu renvoie l'écriture initiale) ; jamais de suppression (corrections par ADJUST/REFUND) ;
+`balanceAfter` calculé dans la même transaction SQL.
+
+---
+
+## 6. Routes API (port 3001 en local)
+
+### Publiques
+- `GET /health` — état de l'API
+- `GET /restaurants` — liste (filtres `?diet=`, `?district=`, `?q=`)
+- `GET /restaurants/:slug` — page complète (profil, menu, programme, avis)
+- `GET /restaurants/:slug/shares/public` — FoodShare republiés (fil public)
+
+### Auth (mode dev)
+- `POST /auth/magic-link` `{email}` → renvoie `devLink` (en prod : vrai e-mail)
+- `GET /auth/verify?token=...` → token de session Bearer
+- `GET /auth/me` 🔒
+
+### Membre 🔒
+- `POST /memberships` `{slug}` — adhérer à un restaurant
+- `GET /memberships/mine` — mes cartes + soldes (dérivés du ledger)
+- `GET /memberships/:id/history` — mouvements d'une carte (membre OU restaurateur)
+- `POST /shares` `{slug, imageUrl, caption, rating}` — publier un FoodShare
+  (**403 si aucune commande** ; crée aussi l'avis qui compte tout de suite)
+- `GET /shares/mine` — mes partages (tous statuts)
+
+### Restaurateur 🔒 (propriétaire uniquement)
+- `PUT /restaurants/:id` — façade (profil)
+- `PUT /restaurants/:id/menu` — menu
+- `PUT /restaurants/:id/program` — programme fidélité
+- `GET /restaurants/:id/members` — clients + activité récente
+- `GET /scan/:code` — résoudre le QR privé d'un membre
+- `POST /ledger/earn` `{code, delta, idempotencyKey}` — créditer des coches/points
+- `POST /ledger/redeem` `{code, idempotencyKey}` — consommer la récompense
+- `POST /ledger/adjust` `{code, delta, idempotencyKey, note}` — correction (motif obligatoire)
+- `GET /restaurants/:id/shares?status=PENDING` — file FoodShare à valider
+- `POST /shares/:id/decide` `{publish, rewardDelta}` — republier (crédit FOODSHARE
+  idempotent `foodshare:<postId>`) ou refuser
+
+---
+
+## 7. Comptes et accès
+
+| Quoi | Valeur |
+|---|---|
+| Compte membre démo | `camille@fidelity.local` (6 cartes) |
+| Compte restaurateur démo | `demo-restaurateur@fidelity.local` (possède les 6 restos) |
+| Repo GitHub | `github.com/abssilian-bot/fidelity` (branche `main`) |
+| Base de données | Supabase PostgreSQL (free tier) |
+| Config backend | `backend/.env` : `DATABASE_URL`, `APP_SECRET`, `PORT` |
+
+⚠️ **SECRETS** : le `.env` est inclus dans le zip et dans le dump code (section finale) pour que
+tu puisses travailler sans reconfigurer. Il contient le mot de passe de la base. Ne le partage
+que dans ta conversation ChatGPT privée, jamais dans un repo public.
+
+---
+
+## 8. Lancer le projet en local
+
+```bash
+# Terminal 1 — API (http://localhost:3001)
+cd backend
+npm install
+npm run dev
+
+# Terminal 2 — Front (http://localhost:5173 par défaut, 7100 chez nous)
+cd app
+npm install
+npm run dev
+```
+
+Tests (API démarrée) : `node backend/scripts/test-api.mjs` puis `node backend/scripts/test-shares.mjs`
+→ `27 tests OK` et `18 tests OK` attendus.
+
+Migration BDD après changement du schéma : `cd backend && npx prisma migrate dev --name <nom>`.
+
+---
+
+## 9. Conventions à faire respecter (à rappeler à ChatGPT)
+
+1. **Tout en français** dans l'UI et les commentaires.
+2. Le solde de points n'est **jamais stocké**, toujours dérivé du ledger.
+3. Toute écriture de points a une `idempotencyKey` unique.
+4. Le front doit **toujours fonctionner sans le backend** (repli démo, try/catch → null).
+5. Design : pas de gras partout, cartes de fidélité style validé (type B / V1 sans paquet cadeau),
+   boutons `outline-button full` pour les actions secondaires, `primary-button` pour l'action principale.
+6. Pas de dépendance payante sans validation explicite du propriétaire.

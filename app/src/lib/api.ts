@@ -153,6 +153,7 @@ function mergeRestaurant(demo: Restaurant | undefined, api: ApiRestaurant): Rest
       },
       menu: [],
       reviews: [],
+      offers: [],
     } as Restaurant)
 
   return {
