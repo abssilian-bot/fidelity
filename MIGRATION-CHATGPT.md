@@ -266,3 +266,5 @@ L'API locale charge maintenant `.env` avec `npm run dev` et `npm start` (Node 20
 - Démarrage : npm run start:render (applique les migrations Prisma avant le serveur).
 - Configuration privée Render : RESEND_API_KEY, EMAIL_FROM et APP_URL en plus des variables existantes.
 - Sans domaine Resend vérifié, envoi limité à l'adresse du compte Resend.
+
+- Base Supabase : utiliser le Session pooler IPv4 sur le port 5432 ; l'adresse directe IPv6 est inaccessible depuis ce service Render. Les migrations recherche et liens à usage unique ont été appliquées avec succès.
