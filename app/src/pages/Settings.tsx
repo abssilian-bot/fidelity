@@ -1,5 +1,4 @@
-import { useState } from 'react'
-import { ChevronRight, Database, FlaskConical, LayoutGrid, RotateCcw, Star, Store, Trash2 } from 'lucide-react'
+import { ChevronRight, Database, FlaskConical, LayoutGrid, Star, Store, Trash2 } from 'lucide-react'
 import { getMember, userReviews, userVisits } from '../data'
 import type { CommonProps } from '../nav'
 import { Tabs } from '../components/kit'
@@ -53,8 +52,6 @@ function UserProfileSummary({ onOpen, liked = 3, visits = 15, reviews = 2, onOpe
 }
 
 export function SettingsPage({ go, favorites, toggleFavorite, resolveRestaurant, switchRole, myReviews = userReviews }: CommonProps) {
-  const [reduceMotion, setReduceMotion] = useState(false)
-  const [largeText, setLargeText] = useState(false)
   const savedRestaurants = [...favorites].map((id) => resolveRestaurant(id))
   const totalVisits = userVisits.reduce((sum, visit) => sum + visit.count, 0)
 
@@ -76,29 +73,6 @@ export function SettingsPage({ go, favorites, toggleFavorite, resolveRestaurant,
         onOpenVisits={() => go('visits')}
         onOpenReviews={() => go('myReviews')}
       />}
-
-      <section style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 24 }}>
-        <button className="settings-row" type="button" onClick={() => setReduceMotion(!reduceMotion)}>
-          <span>
-            <RotateCcw size={18} />
-          </span>
-          <span>
-            <strong style={{ fontSize: 14.5 }}>Réduire les mouvements</strong>
-            <small>Les changements d’état deviennent immédiats.</small>
-          </span>
-          <span className={`radio-dot ${reduceMotion ? 'on' : ''}`} />
-        </button>
-        <button className="settings-row" type="button" onClick={() => setLargeText(!largeText)}>
-          <span>
-            <LayoutGrid size={18} />
-          </span>
-          <span>
-            <strong style={{ fontSize: 14.5 }}>Texte très grand</strong>
-            <small>Aperçu déterministe à 200 % dans la démonstration.</small>
-          </span>
-          <span className={`radio-dot ${largeText ? 'on' : ''}`} />
-        </button>
-      </section>
 
       <section style={{ marginTop: 26 }}>
         <h2 style={{ margin: '0 0 4px' }}>Restaurants likés</h2>
