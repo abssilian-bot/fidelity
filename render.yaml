@@ -11,6 +11,16 @@ services:
     startCommand: npm run start:render
     healthCheckPath: /health
     envVars:
+      - key: NODE_ENV
+        value: production
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: APP_URL
+        sync: false
+      - key: TRUSTED_PROXIES
+        sync: false
       - key: DATABASE_URL
         sync: false # à remplir dans le dashboard Render
       - key: APP_SECRET

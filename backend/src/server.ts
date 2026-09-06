@@ -17,9 +17,11 @@ import { memberSearchRoutes } from './routes/member-search.js'
 const prisma = new PrismaClient()
 const app = Fastify({ logger: {
   // Le logger HTTP ne doit pas exposer le token de /auth/verify ni les en-têtes de session.
-  serializers: { req: (req) => ({ method: req.method, url: req.url?.split('?')[0], hostname: req.hostname, remoteAddress: req.ip }) },
+  serializers: { req: (req) => ({ method: req.method, url: req.url?.split('?')[0].replace(/^\/scan\/[^/]+/, '/scan/[masqué]'), remoteAddress: req.ip }) },
   redact: ['req.headers.authorization', 'req.headers.cookie', 'token', 'devLink'],
-}, trustProxy: true })
+}, bodyLimit: 64 * 1024, requestTimeout: 15_000,
+// N'accorder confiance qu'aux adresses de reverse proxies explicitement configurées.
+trustProxy: process.env.TRUSTED_PROXIES?.split(',').map(value => value.trim()).filter(Boolean) || false })
 
 // CORS : uniquement les fronts autorisés (dev local par défaut, prod via env)
 const allowedOrigins = (
@@ -36,7 +38,7 @@ await app.register(cors, {
 // Sécurité transversale
 registerSecurityHeaders(app)
 registerErrorHandler(app)
-registerAuth(app)
+registerAuth(app, prisma)
 app.addHook('onRequest', rateLimit(300, 60_000)) // garde-fou global : 300 req/min/IP
 
 app.get('/health', async () => ({ status: 'ok', service: 'fidelity-api' }))

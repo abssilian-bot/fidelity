@@ -1095,3 +1095,28 @@ textarea { resize: vertical; }
 .place-icon-button:hover { border-color: #c8450f; color: #c8450f; }
 .place-icon-button:disabled { opacity: 0.35; cursor: not-allowed; }
 .place-icon-button:disabled:hover { border-color: var(--line); color: var(--ink); }
+
+/* Caisse : grandes cibles tactiles, une validation claire, un reçu serveur. */
+.scan-page h1 { margin: 6px 0 22px; }
+.scan-page .form-section { display: flex; flex-direction: column; gap: 15px; }
+.scan-page h2, .scan-page h3, .member-qr h2 { margin: 0; }
+.scan-page p { margin: 0; line-height: 1.6; }
+.scan-page input, .scan-page select { width: 100%; min-height: 52px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--ink); font: inherit; }
+.scan-place, .scan-manual { display: flex; flex-direction: column; gap: 10px; margin: 18px 0; font-size: 14px; }
+.camera-box { position: relative; height: 300px; border-radius: 24px; overflow: hidden; background: #1e241f; color: white; }
+.camera-box video { width: 100%; height: 100%; object-fit: cover; }
+.camera-guide { position: absolute; inset: 35px 55px 60px; border: 3px solid #fff9; border-radius: 22px; pointer-events: none; }
+.camera-hint { position: absolute; bottom: 18px; left: 0; width: 100%; text-align: center; font-size: 13px; }
+.camera-message { position: absolute; inset: 0; background: #222820; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; gap: 14px; text-align: center; font-size: 14px; }
+.camera-message .outline-button { color: white; background: transparent; border-color: #ffffff66; }
+.scan-balance { display: flex; justify-content: space-between; align-items: center; padding: 18px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.scan-balance strong { font-size: 28px; }.scan-balance small { font-size: 14px; font-weight: 400; }
+.scan-presets { display: flex; gap: 10px; }.scan-presets button { flex: 1; min-height: 62px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); color: var(--ink); font-size: 24px; }
+.scan-presets button.selected { border-color: var(--orange); color: var(--orange); background: #c4410f0a; }
+.scan-page .scan-submit { min-height: 60px; font-size: 17px; }.scan-confirm #scan-amount { text-align: center; font-size: 24px; }
+.scan-success { text-align: center; align-items: center; }.scan-success small { color: var(--muted); word-break: break-word; }
+.scan-success-icon { width: 72px; height: 72px; display: grid; place-items: center; background: #e4f1e5; color: #287045; border-radius: 50%; margin: 6px 0; }
+.member-qr { display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; margin-top: 20px; }
+.member-qr p { margin: 0; line-height: 1.6; font-size: 14px; }.member-qr small { color: var(--muted); }
+.qr-paper { padding: 8px; border-radius: 16px; background: white; }.qr-paper svg { display: block; max-width: 100%; height: auto; }
+@media (max-width: 360px) { .camera-guide { left: 30px; right: 30px; }.scan-presets { gap: 6px; } }

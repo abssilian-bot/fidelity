@@ -85,3 +85,27 @@ test('Demande explicite : adresse normalisée, erreurs Resend restituées', asyn
   await assert.rejects(api.requestLoginLink('  MEMBRE@example.com  '), /Impossible d’envoyer/)
   assert.deepEqual(JSON.parse(calls[0].options.body), { email: 'membre@example.com' })
 })
+
+test('Déconnexion explicite : révocation du Bearer avant nettoyage local', async t => {
+  const { api, values, calls } = await fixture(t, async () => [{ message: 'Déconnexion effectuée.' }])
+  values.set('fidelity.account', JSON.stringify(account))
+  await api.disconnectAccount()
+  assert.ok(calls[0].url.endsWith('/auth/logout'))
+  assert.equal(calls[0].options.headers.Authorization, 'Bearer ' + account.token)
+  assert.equal(api.getAccount(), null)
+})
+test('Scan après coupure réseau : la même référence est réémise et le solde local ne change pas', async t => {
+  let count = 0
+  const { api, values, calls } = await fixture(t, async (url) => {
+    if (url.endsWith('/auth/me')) return [account.user]
+    if (++count === 1) throw new Error('Réseau coupé')
+    return [{ id: 'receipt', balanceAfter: 3, delta: 1, idempotentReplay: true }]
+  })
+  values.set('fidelity.account', JSON.stringify(account))
+  const operation = { code: 'fc1_' + 'x'.repeat(32), restaurantId: 'r', operation: 'earn', delta: 1, idempotencyKey: 'same-reference' }
+  await assert.rejects(api.commitScan(operation), /indisponible/)
+  assert.deepEqual(api.getBackendState().balances, {})
+  assert.equal((await api.commitScan(operation)).id, 'receipt')
+  const writes = calls.filter(call => call.url.endsWith('/ledger/earn'))
+  assert.equal(writes.length, 2); assert.equal(writes[0].options.body, writes[1].options.body)
+})

@@ -63,6 +63,23 @@ model UsedMagicLink {
   @@index([expiresAt])
 }
 
+model RevokedSession {
+  tokenHash String @id
+  expiresAt DateTime
+  @@index([expiresAt])
+}
+
+// Un QR ne donne accès qu'à une opération, pendant deux minutes.
+model CardPresentation {
+  id String @id
+  membershipId String
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  consumedAt DateTime?
+  @@index([expiresAt])
+  @@index([membershipId])
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
@@ -153,6 +170,7 @@ model Membership {
   createdAt    DateTime @default(now())
 
   entries      LedgerEntry[]
+  presentations CardPresentation[]
 
   @@unique([userId, restaurantId])
 }
@@ -172,6 +190,7 @@ model LedgerEntry {
   author         User?       @relation("EntryAuthor", fields: [authorId], references: [id])
   note           String?
   createdAt      DateTime    @default(now())
+  qualifyingPost Post? @relation("QualifyingPurchase")
 
   @@index([membershipId, createdAt])
 }
@@ -215,6 +234,8 @@ model Post {
   rating             Int?        // FOODSHARE : note 1..5 laissée par le membre
   status             PostStatus  @default(PUBLISHED) // posts restaurant : publiés direct ; foodshare : PENDING
   sponsored          Boolean     @default(false)
+  qualifyingEntryId  String? @unique
+  qualifyingEntry    LedgerEntry? @relation("QualifyingPurchase", fields: [qualifyingEntryId], references: [id])
   createdAt          DateTime    @default(now())
 
   likes    Like[]

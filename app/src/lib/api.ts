@@ -1,4 +1,4 @@
-import { cacheMembers } from '../data'
+import { cacheMembers, restaurants as demoRestaurants } from '../data'
 import type { HistoryItem, Loyalty, Member, ProgramClient, Restaurant, ScanEvent } from '../data'
 import type { Share } from '../nav'
 import type { SearchProfile } from './search-profile'
@@ -92,6 +92,16 @@ export function logoutAccount(): void {
   backendState = { ...backendState, memberships: {}, balances: {}, membershipsReady: false }
 }
 
+/** Une déconnexion explicite révoque aussi le Bearer sur le serveur. */
+export async function disconnectAccount(): Promise<void> {
+  const account = getAccount()
+  if (account) {
+    tokens.member = account.token
+    await apiCall('POST', '/auth/logout', { role: 'member' })
+  }
+  logoutAccount()
+}
+
 export function getAccount(): Account | null {
   const raw = storageGet('fidelity.account')
   if (!raw) return null
@@ -143,7 +153,7 @@ async function apiCall<T = unknown>(
   path: string,
   options: { role?: Role; body?: unknown } = {},
 ): Promise<T> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  const headers: Record<string, string> = options.body === undefined ? {} : { 'Content-Type': 'application/json' }
   if (options.role && tokens[options.role]) {
     headers.Authorization = `Bearer ${tokens[options.role]}`
   }
@@ -323,9 +333,7 @@ function mergeRestaurant(demo: Restaurant | undefined, api: ApiRestaurant): Rest
           rule: api.program.rule,
           pointsPerEuro: base.loyalty.pointsPerEuro,
           eurosPerStamp: base.loyalty.eurosPerStamp,
-          tiers: base.loyalty.tiers?.length
-            ? base.loyalty.tiers
-            : [{ at: api.program.target, reward: api.program.reward }],
+          tiers: [{ at: api.program.target, reward: api.program.reward }],
           style: api.program.style.toLowerCase() as Loyalty['style'],
         }
       : base.loyalty,
@@ -405,6 +413,10 @@ export async function addMyCard(restaurantId: string): Promise<BackendState> {
 }
 
 export async function refreshMyCards(): Promise<BackendState> {
+  if (!backendState.connected) {
+    const restored = await bootstrapBackend(demoRestaurants)
+    if (!restored.connected) throw new Error('Connexion au serveur nécessaire pour actualiser tes cartes.')
+  }
   await ensureSession('member')
   const mine = await apiCall<ApiMembership[]>('GET', '/memberships/mine', { role: 'member' })
   const memberships: BackendState['memberships'] = {}
@@ -416,6 +428,41 @@ export async function refreshMyCards(): Promise<BackendState> {
   }
   backendState = { ...backendState, memberships, balances, membershipsReady: true }
   return backendState
+}
+
+export async function presentMyCard(frontId: string): Promise<{ code: string; expiresAt: string }> {
+  await ensureSession('member')
+  const card = backendState.memberships[frontId]
+  if (!card) throw new Error('Connecte-toi et ajoute cette carte à ton compte avant de la présenter.')
+  return apiCall('POST', `/memberships/${card.id}/presentation`, { role: 'member' })
+}
+
+export interface OwnedRestaurant { id: string; frontId: string; name: string; status: string }
+export async function fetchOwnedRestaurants(): Promise<OwnedRestaurant[]> {
+  await ensureSession('restaurant')
+  const list = await apiCall<Array<ApiRestaurant & { status: string }>>('GET', '/owner/restaurants', { role: 'restaurant' })
+  for (const restaurant of list) {
+    const frontId = SLUG_TO_ID[restaurant.slug] ?? restaurant.slug
+    backendState.backendIds[frontId] = restaurant.id
+    backendState.restaurants[frontId] = mergeRestaurant(backendState.restaurants[frontId], restaurant)
+  }
+  return list.map(restaurant => ({ id: restaurant.id, frontId: SLUG_TO_ID[restaurant.slug] ?? restaurant.slug, name: restaurant.name, status: restaurant.status }))
+}
+export interface ScannedCard {
+  membershipId: string; member: { displayName: string | null; pseudo: string | null }
+  restaurant: { id: string; name: string }; program: ApiProgram; balance: number; expiresAt: string
+}
+export async function resolveScannedCard(code: string, restaurantId: string): Promise<ScannedCard> {
+  await ensureSession('restaurant')
+  return apiCall('GET', `/scan/${encodeURIComponent(code)}?restaurantId=${encodeURIComponent(restaurantId)}`, { role: 'restaurant' })
+}
+export interface ScanReceipt { id: string; delta: number; balanceAfter: number; createdAt: string; idempotentReplay?: boolean }
+export async function commitScan(input: import('./scan').PendingScan): Promise<ScanReceipt> {
+  await ensureSession('restaurant')
+  return apiCall('POST', `/ledger/${input.operation}`, { role: 'restaurant', body: {
+    code: input.code, restaurantId: input.restaurantId, idempotencyKey: input.idempotencyKey,
+    ...(input.operation === 'earn' ? { delta: input.delta } : {}),
+  } })
 }
 
 // ---------- Historique du membre ----------
@@ -443,12 +490,13 @@ export async function fetchHistory(): Promise<HistoryItem[]> {
     let nextId = 1
     for (const membership of mine) {
       const entries = await apiCall<
-        Array<{ delta: number; balanceAfter: number; kind: string; note?: string; createdAt: string }>
+        Array<{ id: string; source: string; delta: number; balanceAfter: number; kind: string; note?: string; createdAt: string }>
       >('GET', `/memberships/${membership.id}/history`, { role: 'member' })
       for (const entry of entries) {
         const label = KIND_LABEL[entry.kind] ?? KIND_LABEL.EARN
         all.push({
           id: nextId++,
+          serverId: entry.id, createdAt: entry.createdAt, source: entry.source,
           restaurantId: SLUG_TO_ID[membership.restaurant.slug] ?? membership.restaurant.slug,
           title: label.title,
           date: formatDate(entry.createdAt),
@@ -459,7 +507,7 @@ export async function fetchHistory(): Promise<HistoryItem[]> {
         })
       }
     }
-    return all.sort((a, b) => b.id - a.id)
+    return all.sort((a, b) => Date.parse(b.createdAt!) - Date.parse(a.createdAt!))
   } catch {
     return []
   }
@@ -477,12 +525,13 @@ const relativeTime = (iso: string) => {
   return days === 1 ? 'Hier' : `Il y a ${days} j`
 }
 
-export async function fetchClients(frontId: string): Promise<{ clients: ProgramClient[]; scans: ScanEvent[] } | null> {
+export async function fetchClients(frontId: string): Promise<{ clients: ProgramClient[]; scans: ScanEvent[]; stats: { newMembers: number; weeklyCredits: number; totalMembers: number } } | null> {
   const backendId = backendState.backendIds[frontId]
   if (!backendId) return null
   try {
     await ensureSession('restaurant')
     const data = await apiCall<{
+      stats: { newMembers: number; weeklyCredits: number; totalMembers: number }
       members: Array<{ membershipId: string; name: string; balance: number; lastActivityAt: string }>
       recent: Array<{ id: string; clientName: string; delta: number; kind: string; createdAt: string }>
     }>('GET', `/restaurants/${backendId}/members`, { role: 'restaurant' })
@@ -492,6 +541,7 @@ export async function fetchClients(frontId: string): Promise<{ clients: ProgramC
     const unit = program?.type === 'points' ? ('points' as const) : ('coches' as const)
 
     return {
+      stats: data.stats,
       clients: data.members.map((m) => ({
         id: m.membershipId,
         name: m.name,

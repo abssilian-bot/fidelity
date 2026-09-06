@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { CreditCard, Gift, LoaderCircle, Plus, ShoppingBasket, SlidersHorizontal } from 'lucide-react'
-import { getRestaurant, historyItems } from '../data'
+import { getRestaurant, historyItems, setHistoryItems } from '../data'
 import type { Restaurant } from '../data'
 import type { CommonProps } from '../nav'
 import { LoyaltyCard, Notice, Tabs } from '../components/kit'
 import { AppleWalletButton } from '../components/CardActions'
+import { fetchHistory, getBackendState } from '../lib/api'
 
 const KIND_ICONS = {
   gain: Plus,
@@ -15,6 +16,20 @@ const KIND_ICONS = {
 
 export function LoyaltyPage({ go, restaurants, hasCard, cardsLoading, cardsUnavailable, reloadCards }: CommonProps & { restaurants: Restaurant[] }) {
   const [activeTab, setActiveTab] = useState('Mes cartes')
+  const [, update] = useState(0)
+  useEffect(() => {
+    if (!getBackendState().connected || !getBackendState().membershipsReady) return
+    let cancelled = false
+    const refresh = async () => {
+      if (document.hidden) return
+      await reloadCards()
+      const history = await fetchHistory()
+      if (!cancelled) { setHistoryItems(history); update(value => value + 1) }
+    }
+    void refresh()
+    const timer = window.setInterval(() => void refresh(), 15_000)
+    return () => { cancelled = true; clearInterval(timer) }
+  }, [])
   const myCards = restaurants.filter((restaurant) => hasCard(restaurant.id))
 
   return (
@@ -82,6 +97,7 @@ export function LoyaltyPage({ go, restaurants, hasCard, cardsLoading, cardsUnava
 
 export function TransactionPage({ go, transactionId }: CommonProps & { transactionId?: number }) {
   const item = historyItems.find((entry) => entry.id === transactionId) || historyItems[0]
+  if (!item) return <main className="page"><h1>Aucun mouvement</h1><p>Les transactions confirmées apparaîtront ici.</p></main>
   const restaurant = getRestaurant(item.restaurantId)
 
   return (
@@ -91,13 +107,13 @@ export function TransactionPage({ go, transactionId }: CommonProps & { transacti
           <span className="eyebrow">Historique</span>
           <h1 style={{ margin: '6px 0 4px' }}>{item.title}</h1>
           <p className="muted" style={{ margin: 0, fontSize: 14 }}>
-            Mouvement local associé à une commande de démonstration.
+            {item.serverId ? 'Mouvement confirmé dans le registre du restaurant.' : 'Mouvement de démonstration.'}
           </p>
         </div>
       </div>
 
       <Notice title="Registre de fidélité">
-        Ce mouvement appartient uniquement à la session locale de démonstration.
+        {item.serverId ? `Référence serveur : ${item.serverId}` : 'Ce mouvement appartient uniquement à la session locale de démonstration.'}
       </Notice>
 
       <dl className="transaction-details">
@@ -119,7 +135,7 @@ export function TransactionPage({ go, transactionId }: CommonProps & { transacti
         </div>
         <div>
           <dt>Origine</dt>
-          <dd>Commande locale</dd>
+          <dd>{item.serverId ? item.source === 'scan' ? 'Scan en caisse' : item.source === 'foodshare' ? 'FoodShare validé' : 'Correction du restaurant' : 'Démonstration'}</dd>
         </div>
         <div>
           <dt>Solde après opération</dt>

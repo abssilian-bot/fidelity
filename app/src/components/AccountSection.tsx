@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { Check, LoaderCircle, LogOut, Mail } from 'lucide-react'
-import { completeLogin, getAccount, logoutAccount, requestLoginLink } from '../lib/api'
+import { completeLogin, disconnectAccount, getAccount, requestLoginLink } from '../lib/api'
 
 export function AccountSection() {
   const account = getAccount()
@@ -49,7 +49,12 @@ export function AccountSection() {
             <span><strong>{account.user.displayName || account.user.pseudo || 'Mon compte Fidelity'}</strong><small>{account.user.email}</small></span>
             <Check size={18} color="var(--green)" aria-label="Connecté" />
           </div>
-          <button className="outline-button full" type="button" onClick={() => { logoutAccount(); window.location.reload() }}><LogOut size={17} /> Déconnexion</button>
+          <button className="outline-button full" type="button" disabled={busy} onClick={async () => {
+            setStatus('connecting'); setError('')
+            try { await disconnectAccount(); window.location.reload() }
+            catch { setStatus('error'); setError('Le serveur est indisponible. Réessaie pour terminer la déconnexion sécurisée.') }
+          }}><LogOut size={17} /> {busy ? 'Déconnexion…' : 'Déconnexion'}</button>
+          {error && <p className="card-action-error" role="alert">{error}</p>}
         </>
       ) : (
         <form onSubmit={(event) => void request(event)} className="account-form">

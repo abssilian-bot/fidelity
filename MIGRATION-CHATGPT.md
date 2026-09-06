@@ -1,5 +1,7 @@
 # 🚀 Migration ChatGPT — Fidelity (« On mange quoi »)
 
+> **Mise à jour sécurité et caisse du 6 septembre 2026 :** lire [SECURITE-ET-SCAN.md](SECURITE-ET-SCAN.md). Le scan caméra/code temporaire est branché au registre serveur ; les QR sont valables deux minutes et à usage unique. Les sections historiques ci-dessous décrivent aussi des éléments de démonstration.
+
 > **À lire en premier.** Ce fichier explique comment transférer le projet dans ChatGPT.
 > Date de préparation : 5 septembre 2026.
 

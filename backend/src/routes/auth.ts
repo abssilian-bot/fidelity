@@ -22,12 +22,13 @@ export function authRoutes(app: FastifyInstance, prisma: PrismaClient) {
   // Le front n'envoie jamais automatiquement d'e-mail aux comptes de démo.
   app.get('/auth/config', async (_req, reply) => {
     reply.header('Cache-Control', 'no-store')
-    return { emailEnabled: !!resend }
+    return { emailEnabled: !!resend || process.env.NODE_ENV === 'production' }
   })
 
   app.post('/auth/magic-link', { preHandler: authRateLimit }, async (req, reply) => {
     reply.header('Cache-Control', 'no-store')
     const { email } = emailSchema.parse(req.body)
+    if (!resend && process.env.NODE_ENV === 'production') return reply.code(503).send({ error: 'Connexion par e-mail temporairement indisponible.' })
     const token = signToken({ scope: 'magic', email, nonce: randomCode() }, 15 * 60)
     if (resend) {
       try {
@@ -88,6 +89,15 @@ export function authRoutes(app: FastifyInstance, prisma: PrismaClient) {
   })
 
   // Qui suis-je ? (utile pour le front au démarrage)
+  app.post('/auth/logout', { preHandler: app.authenticate }, async (req) => {
+    const token = req.headers.authorization!.slice(7)
+    const payload = verifyToken<{ exp: number }>(token)!
+    const tokenHash = createHash('sha256').update(token).digest('hex')
+    await prisma.revokedSession.upsert({ where: { tokenHash }, update: {}, create: { tokenHash, expiresAt: new Date(payload.exp) } })
+    await prisma.revokedSession.deleteMany({ where: { expiresAt: { lt: new Date() } } })
+    return { message: 'Déconnexion effectuée.' }
+  })
+
   app.get('/auth/me', { preHandler: app.authenticate }, async (req, reply) => {
     reply.header('Cache-Control', 'no-store')
     const user = await prisma.user.findUnique({

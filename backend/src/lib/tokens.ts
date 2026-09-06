@@ -4,7 +4,7 @@ import crypto from 'node:crypto'
 // Le serveur seul connaît APP_SECRET → impossible de forger un token.
 
 const rawSecret = process.env.APP_SECRET
-if (!rawSecret || rawSecret === 'change-me') {
+if (!rawSecret || rawSecret.length < 32 || rawSecret === 'change-me') {
   throw new Error('APP_SECRET manquant ou par défaut : configure backend/.env')
 }
 const SECRET: string = rawSecret

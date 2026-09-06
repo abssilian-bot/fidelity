@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { MemberQr } from '../components/MemberQr'
 import { Check, Clock3, CreditCard, Gift, Heart, Info, MapPin, Navigation, Percent, Share2, Sparkles, Star } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Offer, Restaurant } from '../data'
@@ -237,6 +238,7 @@ export function CardDetailPage({ go, restaurant, ...cardProps }: CommonProps & {
       </div>
 
       <LoyaltyCard restaurant={restaurant} />
+      {cardProps.hasCard(restaurant.id) && <MemberQr restaurantId={restaurant.id} onSync={cardProps.syncCards} />}
       <div style={{ marginTop: 18 }}><CardActions key={restaurant.id} {...cardProps} restaurant={restaurant} /></div>
 
       <section className="reward-panel">

@@ -11,10 +11,11 @@ const headers = { authorization: `Bearer ${signToken({ sub: 'member-test', role:
 
 async function fixture(t, { restaurant = { id: 'resto-test', program: { active: true } }, balance = 0 } = {}) {
   const app = Fastify()
-  registerAuth(app); registerErrorHandler(app)
+  registerAuth(app, { user: { findUnique: async () => ({ role: 'MEMBER' }) }, revokedSession: { findUnique: async () => null } }); registerErrorHandler(app)
   const calls = []
   let saved
   membershipRoutes(app, {
+    ledgerEntry: { aggregate: async () => ({ _sum: { delta: balance } }) },
     restaurant: { findFirst: async args => { calls.push(['restaurant', args]); return restaurant } },
     membership: {
       upsert: async args => {

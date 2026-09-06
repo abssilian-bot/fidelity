@@ -3,6 +3,11 @@ import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from
 // --- En-têtes de sécurité HTTP (protection XSS, clickjacking, sniffing) ---
 export function registerSecurityHeaders(app: FastifyInstance) {
   app.addHook('onSend', async (_req, reply) => {
+    if (!_req.url.startsWith('/assets/') && !_req.url.startsWith('/images/')) reply.header('Cache-Control', 'no-store')
+    if (process.env.NODE_ENV === 'production') {
+      reply.header('Strict-Transport-Security', 'max-age=31536000')
+      reply.header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; connect-src 'self'; font-src 'self' data:; media-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
+    }
     reply.header('X-Content-Type-Options', 'nosniff')
     reply.header('X-Frame-Options', 'DENY')
     reply.header('Referrer-Policy', 'no-referrer')
@@ -13,7 +18,7 @@ export function registerSecurityHeaders(app: FastifyInstance) {
 
 // --- Limiteur de débit en mémoire (anti-spam / anti brute-force) ---
 // Simple et sans dépendance. Par IP : `max` requêtes par fenêtre `windowMs`.
-export function rateLimit(max: number, windowMs: number) {
+export function rateLimit(max: number, windowMs: number, keyOf: (req: FastifyRequest) => string = req => req.ip) {
   const hits = new Map<string, { count: number; reset: number }>()
 
   const cleaner = setInterval(() => {
@@ -24,7 +29,7 @@ export function rateLimit(max: number, windowMs: number) {
 
   return async (req: FastifyRequest, reply: FastifyReply) => {
     const now = Date.now()
-    const key = req.ip
+    const key = keyOf(req)
     const entry = hits.get(key)
     if (!entry || entry.reset < now) {
       hits.set(key, { count: 1, reset: now + windowMs })
@@ -52,7 +57,8 @@ export function registerErrorHandler(app: FastifyInstance) {
     if (statusCode && statusCode < 500) {
       return reply.code(statusCode).send({ error: error.message })
     }
-    req.log.error(error)
+    // Ne jamais journaliser les paramètres SQL, les QR, les tokens ou les corps reçus.
+    req.log.error({ errorType: error.name, code: error.code }, 'Échec de la requête')
     return reply.code(500).send({ error: 'Erreur interne du serveur' })
   })
 }

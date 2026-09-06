@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Compass, CreditCard, Home, LayoutDashboard, Settings, Share2, Store } from 'lucide-react'
 import { getRestaurant, pendingSharesSeed, restaurants as demoRestaurants, setHistoryItems, setProgramClients, setRecentScans, userReviews, userVisits } from './data'
 import type { Loyalty, MenuItem, Offer, Restaurant, UserReview } from './data'
-import { addMyCard, bootstrapBackend, completeLogin, decideShareApi, fetchClients, fetchHistory, fetchMyShares, fetchPendingShares, getAccount, publishShareApi, refreshMyCards } from './lib/api'
+import { addMyCard, bootstrapBackend, completeLogin, decideShareApi, fetchClients, fetchHistory, fetchMyShares, fetchOwnedRestaurants, fetchPendingShares, getAccount, publishShareApi, refreshMyCards } from './lib/api'
 import type { BackendState } from './lib/api'
 import type { AppRole, CommonProps, Route, RouteName, SearchFilters, Share } from './nav'
 import { BackButton } from './components/kit'
@@ -21,6 +21,7 @@ import { defaultSearchFilters } from './lib/search'
 import { readSearchProfiles, saveSearchProfiles, searchProfileOf, searchProfileSchema } from './lib/search-profile'
 import { WEEK_DAYS } from './lib/search-catalog'
 import { readMyCards, saveMyCards, usedCardIds } from './lib/my-cards'
+import { ScanPage } from './pages/Scan'
 
 const MAIN_PAGES = new Set<RouteName>([
   'home',
@@ -102,8 +103,9 @@ function App() {
         setToast('Lien invalide ou expiré — redemande un lien de connexion.')
       }
       if (!state.connected) return
+      setSharedPosts([])
       const history = await fetchHistory()
-      if (!cancelled && (history.length || getAccount())) setHistoryItems(history)
+      if (!cancelled) setHistoryItems(history)
       // FoodShare : les partages réels du membre (en attente, publiés, refusés)
       const mineShares = await fetchMyShares()
       if (!cancelled && mineShares?.length) {
@@ -136,17 +138,38 @@ function App() {
   const [myRestaurants, setMyRestaurants] = useState<string[]>(['amina', 'braise'])
   const [activeRestoId, setActiveRestoId] = useState('amina')
   const [drafts, setDrafts] = useState<Record<string, RestoDraft>>({})
+  const [ownerAccess, setOwnerAccess] = useState<'loading' | 'ready' | 'none'>('loading')
+  useEffect(() => {
+    if (role !== 'restaurant' || !backend) return
+    let cancelled = false
+    if (!backend.connected) { setOwnerAccess(getAccount() ? 'none' : 'ready'); return }
+    setOwnerAccess('loading')
+    fetchOwnedRestaurants().then(items => {
+      if (cancelled) return
+      const ids = items.filter(item => item.status === 'VERIFIED').map(item => item.frontId)
+      setMyRestaurants(ids)
+      setActiveRestoId(current => ids.includes(current) ? current : ids[0] || '')
+      setOwnerAccess(ids.length ? 'ready' : 'none')
+    }).catch(() => { if (!cancelled) setOwnerAccess('none') })
+    return () => { cancelled = true }
+  }, [role, backend?.connected])
 
   // Espace restaurateur : clients réels du restaurant actif
   useEffect(() => {
     if (!backend?.connected || role !== 'restaurant') return
-    fetchClients(activeRestoId).then((data) => {
-      if (!data) return
-      setProgramClients(data.clients)
-      setRecentScans(data.scans)
+    let cancelled = false
+    const refresh = () => fetchClients(activeRestoId).then((data) => {
+      if (cancelled) return
+      setProgramClients(data?.clients ?? [])
+      setRecentScans(data?.scans ?? [])
       setClientsVersion((version) => version + 1) // force le rafraîchissement des écrans
     })
-  }, [backend, role, activeRestoId])
+    void refresh()
+    const changed = () => void refresh()
+    const timer = window.setInterval(() => { if (!document.hidden) void refresh() }, 15_000)
+    window.addEventListener('fidelity:ledger-updated', changed)
+    return () => { cancelled = true; clearInterval(timer); window.removeEventListener('fidelity:ledger-updated', changed) }
+  }, [backend?.connected, role, activeRestoId])
 
   // Espace restaurateur : file FoodShare réelle (partages en attente de validation)
   useEffect(() => {
@@ -275,8 +298,11 @@ function App() {
         addLocalReview()
         return true
       }
-      // null → API injoignable malgré le bootstrap : repli démo ci-dessous
+      setToast('Publication non confirmée. Vérifie ta connexion ou attends une nouvelle visite pour proposer un autre FoodShare.')
+      return false
     }
+
+    if (getAccount()) { setToast('Connexion au serveur nécessaire pour publier avec ton compte.'); return false }
 
     setSharedPosts((current) => [
       {
@@ -296,17 +322,24 @@ function App() {
     return true
   }
 
-  const decideShare = (id: number, publish: boolean, rewardDelta = 1) => {
+  const decidingShares = useRef(new Set<number>())
+  const decideShare = async (id: number, publish: boolean, rewardDelta = 1): Promise<boolean> => {
+    if (decidingShares.current.has(id)) return false
     const target = sharedPosts.find((share) => share.id === id)
+    if (!target) return false
+    decidingShares.current.add(id)
+    try {
+      if (target.backendId && !await decideShareApi(target.backendId, publish, rewardDelta)) {
+        setToast('Le serveur n’a pas confirmé la décision. Recharge la file avant de réessayer.')
+        return false
+      }
+      if (!target.backendId && backend?.connected) { setToast('Ce partage de démonstration ne peut pas être crédité.'); return false }
     setSharedPosts((current) =>
       current.map((share) => (share.id === id ? { ...share, status: publish ? ('published' as const) : ('rejected' as const) } : share)),
     )
-    // Partage réel → la décision (et le crédit ledger) part au serveur
-    if (target?.backendId) {
-      decideShareApi(target.backendId, publish, rewardDelta).then((ok) => {
-        if (!ok) setToast('Décision enregistrée localement — le serveur est injoignable')
-      })
-    }
+      window.dispatchEvent(new Event('fidelity:ledger-updated'))
+      return true
+    } finally { decidingShares.current.delete(id) }
   }
 
   // Établissements : suppression en deux temps (archivé → suppression définitive)
@@ -350,7 +383,7 @@ function App() {
     const restaurant = baseRestaurant(id)
     const draft = drafts[id]
     // Le solde réel du backend prime toujours sur les valeurs de démonstration
-    const balance = backend?.connected ? backend.balances[id] ?? 0 : undefined
+    const balance = backend?.connected ? backend.balances[id] ?? 0 : getAccount() ? 0 : undefined
     const withBalance = (input: Restaurant): Restaurant =>
       balance === undefined ? input : { ...input, loyalty: { ...input.loyalty, current: balance } }
     if (!draft) return withBalance(restaurant)
@@ -413,7 +446,7 @@ function App() {
     window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior })
   }
 
-  const hasCard = (id: string) => backend?.connected ? !!backend.memberships[id] : !!backend && localCards.has(id)
+  const hasCard = (id: string) => backend?.connected ? !!backend.memberships[id] : !getAccount() && !!backend && localCards.has(id)
 
   const addCard = async (id: string) => {
     if (!backend) throw new Error('Vos cartes sont en cours de chargement. Réessayez dans un instant.')
@@ -467,6 +500,7 @@ function App() {
     cardsLoading: !backend || refreshingCards,
     cardsUnavailable: !!backend?.connected && !backend.membershipsReady,
     reloadCards,
+    syncCards: setBackend,
     switchRole,
     sharedPosts,
     publishShare,
@@ -527,6 +561,9 @@ function App() {
     case 'restoDashboard':
       page = <RestoDashboardPage {...common} restaurant={activeRestaurant} />
       break
+    case 'restoScan':
+      page = <ScanPage {...common} restaurantId={activeRestoId} />
+      break
     case 'restoClients':
       page = <RestoClientsPage {...common} restaurant={activeRestaurant} />
       break
@@ -579,6 +616,14 @@ function App() {
       break
     default:
       page = <HomePage {...common} restaurants={resolvedRestaurants} backendConnected={backend?.connected ?? false} filters={searchFilters} setFilters={setSearchFilters} />
+  }
+
+  if (role === 'restaurant' && ownerAccess !== 'ready' && route.name !== 'settings' && route.name !== 'restoScan') {
+    page = <main className="page page-with-nav"><span className="eyebrow">Espace restaurateur</span><h1>Ton établissement</h1>
+      <p>{ownerAccess === 'loading' ? 'Chargement de tes établissements…' : 'Connecte-toi avec le compte propriétaire d’un restaurant validé. Les cartes de ses clients seront accessibles ici.'}</p>
+      {ownerAccess === 'none' && <button className="primary-button full" type="button" onClick={() => go('settings')}>Ouvrir mon compte</button>}
+      <button className="outline-button full" type="button" style={{ marginTop: 12 }} onClick={() => switchRole('member')}>Revenir à l’espace membre</button>
+    </main>
   }
 
   if (backend === null) {

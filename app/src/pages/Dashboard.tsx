@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ArrowRight, Building2, Check, ChevronRight, CopyPlus, Gift, QrCode, RotateCcw, ScanLine, Share2, Star, Store, Trash2, UtensilsCrossed, Users, X } from 'lucide-react'
 import { programClients, recentScans } from '../data'
 import type { Restaurant } from '../data'
 import type { AppRole, CommonProps } from '../nav'
+import { fetchClients, getBackendState } from '../lib/api'
 
 /** Écran d'entrée façon inscription : on choisit son interface. */
 export function RolePickerPage({ onSelect }: { onSelect: (role: AppRole) => void }) {
@@ -70,10 +71,18 @@ export function RolePickerPage({ onSelect }: { onSelect: (role: AppRole) => void
 }
 
 /** Résumé : les chiffres utiles et les actions du jour, rien de plus. */
-export function RestoDashboardPage({ go, restaurant, notify, sharedPosts = [] }: CommonProps & { restaurant: Restaurant }) {
+export function RestoDashboardPage({ go, restaurant, sharedPosts = [] }: CommonProps & { restaurant: Restaurant }) {
   const pendingShares = sharedPosts.filter((share) => share.restaurantId === restaurant.id && share.status === 'pending')
-  const newThisWeek = 3
-  const weeklyCredits = 27
+  const [stats, setStats] = useState<{ newMembers: number; weeklyCredits: number; totalMembers: number } | null>(null)
+  const connected = getBackendState().connected
+  useEffect(() => {
+    if (!connected) return
+    let cancelled = false
+    const refresh = () => fetchClients(restaurant.id).then(data => { if (!cancelled) setStats(data?.stats ?? null) })
+    void refresh()
+    const timer = window.setInterval(() => { if (!document.hidden) void refresh() }, 15_000)
+    return () => { cancelled = true; clearInterval(timer) }
+  }, [restaurant.id, connected])
 
   return (
     <main className="page page-with-nav">
@@ -82,22 +91,22 @@ export function RestoDashboardPage({ go, restaurant, notify, sharedPosts = [] }:
           <span className="eyebrow">{restaurant.name}</span>
           <h1 style={{ margin: '6px 0 4px' }}>Résumé</h1>
           <p className="muted" style={{ margin: 0, fontSize: 14 }}>
-            Vendredi 31 juillet · votre programme en un coup d’œil.
+            {new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })} · {connected ? 'votre programme en un coup d’œil.' : 'aperçu de démonstration.'}
           </p>
         </div>
       </div>
 
       <div className="kpi-grid">
         <div className="kpi-card">
-          <strong>{programClients.length}</strong>
+          <strong>{connected ? stats?.totalMembers ?? '—' : programClients.length}</strong>
           <span>membres au programme</span>
         </div>
         <div className="kpi-card">
-          <strong>{weeklyCredits}</strong>
-          <span>coches distribuées (7 j)</span>
+          <strong>{connected ? stats?.weeklyCredits ?? '—' : 27}</strong>
+          <span>{restaurant.loyalty.type === 'stamps' ? 'coches' : 'points'} distribués (7 j)</span>
         </div>
         <div className="kpi-card">
-          <strong>{newThisWeek}</strong>
+          <strong>{connected ? stats?.newMembers ?? '—' : 3}</strong>
           <span>nouveaux membres (7 j)</span>
         </div>
         <button className="kpi-card accent as-button" type="button" onClick={() => go('restoFoodshare')}>
@@ -107,7 +116,7 @@ export function RestoDashboardPage({ go, restaurant, notify, sharedPosts = [] }:
       </div>
 
       <div className="action-stack">
-        <button className="primary-button full" type="button" onClick={() => notify('Le scan client arrive avec les comptes restaurateurs')}>
+        <button className="primary-button full" type="button" onClick={() => go('restoScan')}>
           <ScanLine size={19} /> Scanner un client
         </button>
         <button className="outline-button full" type="button" onClick={() => go('restoClients')}>
@@ -272,8 +281,8 @@ export function RestoFoodsharePage({ restaurant, notify, sharedPosts = [], decid
                     <button
                       className="primary-button share-validate"
                       type="button"
-                      onClick={() => {
-                        decideShare?.(share.id, true, reward)
+                      onClick={async () => {
+                        if (!await decideShare?.(share.id, true, reward)) return
                         notify(
                           `Partage republié · ${creditLabel} crédité${reward > 1 && isStamps ? 's' : ''} pour ${share.author}${share.backendId ? '' : ' (démo)'}`,
                         )
@@ -285,8 +294,8 @@ export function RestoFoodsharePage({ restaurant, notify, sharedPosts = [], decid
                       className="share-decline"
                       type="button"
                       aria-label={`Refuser le partage de ${share.author}`}
-                      onClick={() => {
-                        decideShare?.(share.id, false)
+                      onClick={async () => {
+                        if (!await decideShare?.(share.id, false)) return
                         notify(`Partage de ${share.author} refusé — il reste visible sur son profil uniquement`)
                       }}
                     >

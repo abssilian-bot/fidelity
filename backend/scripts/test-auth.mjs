@@ -22,7 +22,7 @@ async function fixture(t, { resend = false, sendError = false, throwError = fals
     return new Response(JSON.stringify(sendError ? { name: 'validation_error', message: 'Détail privé : https://fidelity.example/?token=secret' } : { id: 'mail-test' }), { status: sendError ? 403 : 200, headers: { 'content-type': 'application/json' } })
   }
   const app = Fastify({ logger: { stream: { write: line => logs.push(line) } } })
-  registerAuth(app); registerErrorHandler(app)
+  registerAuth(app, { user: { findUnique: async () => ({ role: 'MEMBER' }) }, revokedSession: { findUnique: async () => null } }); registerErrorHandler(app)
   const upsert = async args => {
     if (!users.has(args.where.email)) users.set(args.where.email, { id: 'user-' + users.size, ...args.create, role: 'MEMBER', pseudo: null, displayName: null })
     return users.get(args.where.email)
@@ -100,4 +100,27 @@ test('E-mail invalide rejeté avant envoi', async t => {
   const { request, messages } = await fixture(t, { resend: true })
   assert.equal((await request('pas-un-email')).statusCode, 400)
   assert.equal(messages.length, 0)
+})
+
+test('Production sans clé Resend : aucun devLink ni token exposé', async t => {
+  const previous = process.env.NODE_ENV
+  process.env.NODE_ENV = 'production'
+  t.after(() => { if (previous === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previous })
+  const { app, request, logs } = await fixture(t)
+  const response = await request()
+  assert.equal(response.statusCode, 503); assert.equal(response.json().devLink, undefined)
+  assert.equal((await app.inject('/auth/config')).json().emailEnabled, true)
+  assert.ok(!logs.join('').includes('token='))
+})
+
+test('En-têtes de proxy inventés : le limiteur local ne peut pas être contourné', async t => {
+  const { rateLimit, registerSecurityHeaders } = await import('../dist/lib/security.js')
+  const app = Fastify({ trustProxy: false })
+  app.addHook('onRequest', rateLimit(2, 60_000)); registerSecurityHeaders(app)
+  app.get('/probe', async () => ({ ok: true }))
+  t.after(() => app.close())
+  for (let i = 0; i < 3; i++) {
+    const result = await app.inject({ url: '/probe', headers: { 'x-forwarded-for': `198.51.100.${i}` } })
+    assert.equal(result.statusCode, i < 2 ? 200 : 429)
+  }
 })

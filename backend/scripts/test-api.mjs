@@ -1,7 +1,7 @@
 // Test de bout en bout de l'API Fidelity — usage :
 //   1. démarrer l'API (npm run dev)
 //   2. node scripts/test-api.mjs
-const BASE = 'http://localhost:3001'
+const BASE = process.env.TEST_API_URL || 'http://localhost:3001'
 let passed = 0, failed = 0
 
 function check(name, condition, extra = '') {
@@ -16,7 +16,7 @@ async function call(method, path, { token, body } = {}) {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: body ? JSON.stringify(body) : undefined,
+    body: body ? JSON.stringify(body) : method === 'POST' ? '{}' : undefined,
   })
   return { status: res.status, data: await res.json().catch(() => null) }
 }
@@ -85,47 +85,57 @@ const camilleToken = await login('camille@fidelity.local')
 
 console.log('\n── 4. Parcours restaurateur (scan + points) ──')
 const ownerToken = await login('demo-restaurateur@fidelity.local')
+const aminaRestaurant = (await call('GET', '/restaurants/chez-amina')).data
+const presentations = new Map()
+async function operation(method, path, { token, body }) {
+  if (!presentations.has(body.idempotencyKey)) {
+    const qr = await call('POST', `/memberships/${aminaCard.id}/presentation`, { token: camilleToken })
+    presentations.set(body.idempotencyKey, qr.data.code)
+  }
+  return call(method, path, { token, body: { ...body, code: presentations.get(body.idempotencyKey), restaurantId: aminaRestaurant.id } })
+}
 {
-  const scan = await call('GET', `/scan/${aminaCard.publicCode}`, { token: ownerToken })
+  const qr = await call('POST', `/memberships/${aminaCard.id}/presentation`, { token: camilleToken })
+  const scan = await call('GET', `/scan/${qr.data.code}`, { token: ownerToken })
   check('Scan du QR Camille → fiche membre + programme', scan.status === 200 && scan.data.member?.displayName === 'Camille Robert')
 
-  const earn = await call('POST', '/ledger/earn', {
+  const earn = await operation('POST', '/ledger/earn', {
     token: ownerToken,
     body: { code: aminaCard.publicCode, delta: 1, idempotencyKey: 'test-scan-0001', note: 'Déjeuner 31/08' },
   })
   check('Scan → +1 coche (balance=1)', earn.status === 201 && earn.data.balanceAfter === 1, JSON.stringify(earn.data))
 
-  const replay = await call('POST', '/ledger/earn', {
+  const replay = await operation('POST', '/ledger/earn', {
     token: ownerToken,
     body: { code: aminaCard.publicCode, delta: 1, idempotencyKey: 'test-scan-0001', note: 'Déjeuner 31/08' },
   })
   check('Rejeu du même scan → PAS de doublon (idempotent)', replay.status === 200 && replay.data.idempotentReplay === true && replay.data.balanceAfter === 1)
 
-  const redeemTooEarly = await call('POST', '/ledger/redeem', {
+  const redeemTooEarly = await operation('POST', '/ledger/redeem', {
     token: ownerToken,
     body: { code: aminaCard.publicCode, idempotencyKey: 'test-redeem-001' },
   })
   check('Récompense avec 1/10 coches → refusée (409)', redeemTooEarly.status === 409)
 
   for (let i = 2; i <= 10; i++) {
-    await call('POST', '/ledger/earn', {
+    await operation('POST', '/ledger/earn', {
       token: ownerToken,
       body: { code: aminaCard.publicCode, delta: 1, idempotencyKey: `test-scan-000${i}` },
     })
   }
-  const redeem = await call('POST', '/ledger/redeem', {
+  const redeem = await operation('POST', '/ledger/redeem', {
     token: ownerToken,
     body: { code: aminaCard.publicCode, idempotencyKey: 'test-redeem-002', note: 'Plat signature offert' },
   })
   check('À 10/10 → récompense OK, solde retombe à 0', redeem.status === 201 && redeem.data.balanceAfter === 0, JSON.stringify(redeem.data))
 
-  const adjust = await call('POST', '/ledger/adjust', {
+  const adjust = await operation('POST', '/ledger/adjust', {
     token: ownerToken,
     body: { code: aminaCard.publicCode, delta: 2, idempotencyKey: 'test-adjust-001', note: 'Geste commercial : attente longue' },
   })
   check('Correction manuelle avec motif → +2 (solde=2)', adjust.status === 201 && adjust.data.balanceAfter === 2)
 
-  const adjustNoReason = await call('POST', '/ledger/adjust', {
+  const adjustNoReason = await operation('POST', '/ledger/adjust', {
     token: ownerToken,
     body: { code: aminaCard.publicCode, delta: 5, idempotencyKey: 'test-adjust-002' },
   })
@@ -136,9 +146,11 @@ console.log('\n── 5. Sécurité : un membre ne peut pas se créditer ──'
 {
   const otherCard = await call('GET', '/memberships/mine', { token: camilleToken })
   const casa = otherCard.data.find((m) => m.restaurant.slug === 'casa-verde')
+  const casaQr = await call('POST', `/memberships/${casa.id}/presentation`, { token: camilleToken })
+  const casaRestaurant = (await call('GET', '/restaurants/casa-verde')).data
   const selfEarn = await call('POST', '/ledger/earn', {
     token: camilleToken,
-    body: { code: casa.publicCode, delta: 10, idempotencyKey: 'hack-self-001' },
+    body: { code: casaQr.data.code, restaurantId: casaRestaurant.id, delta: 10, idempotencyKey: 'hack-self-001' },
   })
   check('Camille scanne sa propre carte → 403 interdit', selfEarn.status === 403)
 

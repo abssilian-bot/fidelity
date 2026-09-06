@@ -25,6 +25,7 @@ export type RouteName =
   | 'foodshareCompose'
   | 'rolePicker'
   | 'restoDashboard'
+  | 'restoScan'
   | 'restoClients'
   | 'restoFacade'
   | 'restoFoodshare'
@@ -55,10 +56,11 @@ export interface CommonProps {
   cardsLoading: boolean
   cardsUnavailable: boolean
   reloadCards: () => Promise<void>
+  syncCards?: (state: import('./lib/api').BackendState) => void
   switchRole?: (role: AppRole) => void
   sharedPosts?: Share[]
   publishShare?: (input: { restaurantId: string; image: string; caption: string; rating: number }) => Promise<boolean> | void
-  decideShare?: (id: number, publish: boolean, rewardDelta?: number) => void
+  decideShare?: (id: number, publish: boolean, rewardDelta?: number) => Promise<boolean>
   myReviews?: UserReview[]
 }
 

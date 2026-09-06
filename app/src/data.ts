@@ -114,6 +114,9 @@ export interface Story {
 }
 
 export interface HistoryItem {
+  serverId?: string
+  createdAt?: string
+  source?: string
   id: number
   restaurantId: string
   title: string

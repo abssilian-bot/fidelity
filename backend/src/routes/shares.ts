@@ -2,7 +2,9 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import type { PrismaClient } from '@prisma/client'
 import { rateLimit } from '../lib/security.js'
-import { writeEntry, handleLedgerError } from './ledger.js'
+import { handleLedgerError } from './ledger.js'
+import { LedgerError, lockMembership, writeEntryInTransaction } from '../lib/ledger.js'
+import { safeImage } from '../lib/urls.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FOODSHARE — boucle complète :
@@ -16,7 +18,7 @@ import { writeEntry, handleLedgerError } from './ledger.js'
 
 const publishSchema = z.object({
   slug: z.string().min(1).max(120).regex(/^[a-z0-9-]+$/),
-  imageUrl: z.string().min(1).max(500),
+  imageUrl: safeImage,
   caption: z.string().max(300).default(''),
   rating: z.number().int().min(1).max(5),
 })
@@ -55,8 +57,12 @@ export function shareRoutes(app: FastifyInstance, prisma: PrismaClient) {
       return reply.code(403).send({ error: 'FoodShare disponible après une première commande dans ce restaurant.' })
     }
 
-    const [post] = await prisma.$transaction([
-      prisma.post.create({
+    try {
+    const post = await prisma.$transaction(async tx => {
+      await lockMembership(tx, membership.id)
+      const purchase = await tx.ledgerEntry.findFirst({ where: { membershipId: membership.id, kind: 'EARN', status: 'CONFIRMED', qualifyingPost: null }, orderBy: { createdAt: 'desc' }, select: { id: true } })
+      if (!purchase) throw new LedgerError(409, 'Un FoodShare a déjà été proposé pour chaque visite. Reviens après une nouvelle commande.')
+      const created = await tx.post.create({
         data: {
           authorId: req.userId,
           taggedRestaurantId: restaurant.id,
@@ -64,17 +70,20 @@ export function shareRoutes(app: FastifyInstance, prisma: PrismaClient) {
           caption: body.caption,
           rating: body.rating,
           status: 'PENDING',
+          qualifyingEntryId: purchase.id,
         },
         select: postSelect,
-      }),
+      })
       // La note compte tout de suite : un avis par membre et par restaurant
-      prisma.review.upsert({
+      await tx.review.upsert({
         where: { restaurantId_authorId: { restaurantId: restaurant.id, authorId: req.userId } },
         update: { rating: body.rating, text: body.caption },
         create: { restaurantId: restaurant.id, authorId: req.userId, rating: body.rating, text: body.caption },
-      }),
-    ])
+      })
+      return created
+    })
     return reply.code(201).send(post)
+    } catch (error) { return handleLedgerError(reply, error) }
   })
 
   // « Mes partages » côté membre (tous statuts, avec le nom du restaurant)
@@ -135,7 +144,7 @@ export function shareRoutes(app: FastifyInstance, prisma: PrismaClient) {
     }
     const restaurant = await prisma.restaurant.findUnique({
       where: { id: post.taggedRestaurantId },
-      select: { ownerId: true },
+      select: { ownerId: true, status: true, program: true },
     })
     if (!restaurant) return reply.code(404).send({ error: 'Restaurant introuvable.' })
     if (restaurant.ownerId !== req.userId && req.userRole !== 'ADMIN') {
@@ -145,35 +154,30 @@ export function shareRoutes(app: FastifyInstance, prisma: PrismaClient) {
       return reply.code(409).send({ error: 'Ce partage a déjà été traité.' })
     }
 
-    if (!body.publish) {
-      const updated = await prisma.post.update({ where: { id: post.id }, data: { status: 'REJECTED' }, select: postSelect })
-      return reply.send({ post: updated, credited: null })
-    }
-
-    // Republication : le membre est crédité sur sa carte (idempotent via foodshare:<postId>)
-    const membership = await prisma.membership.findUnique({
-      where: { userId_restaurantId: { userId: post.authorId, restaurantId: post.taggedRestaurantId } },
-      select: { id: true },
-    })
-    const updated = await prisma.post.update({ where: { id: post.id }, data: { status: 'PUBLISHED' }, select: postSelect })
-
-    let credited: unknown = null
-    if (membership && body.rewardDelta > 0) {
-      try {
-        credited = await writeEntry(prisma, {
-          membershipId: membership.id,
-          delta: body.rewardDelta,
-          kind: 'FOODSHARE',
-          source: 'foodshare',
-          idempotencyKey: `foodshare:${post.id}`,
-          authorId: req.userId,
-          note: body.note ?? 'Partage FoodShare republié',
-        })
-      } catch (error) {
-        return handleLedgerError(reply, error, prisma, `foodshare:${post.id}`)
-      }
-    }
-    return reply.send({ post: updated, credited })
+    try {
+      const result = await prisma.$transaction(async tx => {
+        await tx.$queryRaw`SELECT "id" FROM "Restaurant" WHERE "id" = ${post.taggedRestaurantId} FOR SHARE`
+        await tx.$queryRaw`SELECT "id" FROM "LoyaltyProgram" WHERE "restaurantId" = ${post.taggedRestaurantId} FOR SHARE`
+        const current = await tx.restaurant.findUnique({ where: { id: post.taggedRestaurantId! }, include: { program: true } })
+        if (!current || (current.ownerId !== req.userId && req.userRole !== 'ADMIN')) throw new LedgerError(403, 'Accès interdit.')
+        if (current.status !== 'VERIFIED' || !current.program?.active) throw new LedgerError(409, 'Ce programme est actuellement indisponible.')
+        if (body.rewardDelta > (current.program.type === 'STAMPS' ? 10 : 1000)) throw new LedgerError(400, 'Récompense supérieure à la limite du programme.')
+        const changed = await tx.post.updateMany({ where: { id: post.id, status: 'PENDING' }, data: { status: body.publish ? 'PUBLISHED' : 'REJECTED' } })
+        if (!changed.count) throw new LedgerError(409, 'Ce partage a déjà été traité.')
+        let credited = null
+        if (body.publish && body.rewardDelta > 0) {
+          if (post.authorId === req.userId) throw new LedgerError(403, 'Tu ne peux pas récompenser ton propre partage.')
+          const membership = await tx.membership.findUnique({ where: { userId_restaurantId: { userId: post.authorId!, restaurantId: post.taggedRestaurantId! } } })
+          if (!membership) throw new LedgerError(409, 'La carte du membre est indisponible.')
+          credited = await writeEntryInTransaction(tx, {
+            membershipId: membership.id, delta: body.rewardDelta, kind: 'FOODSHARE', source: 'foodshare',
+            idempotencyKey: `foodshare:${post.id}`, authorId: req.userId, note: body.note ?? 'Partage FoodShare republié',
+          })
+        }
+        return { post: await tx.post.findUnique({ where: { id: post.id }, select: postSelect }), credited }
+      }, { maxWait: 5_000, timeout: 10_000 })
+      return reply.send(result)
+    } catch (error) { return handleLedgerError(reply, error) }
   })
 
   // Fil public : les FoodShare republiés d'un restaurant (page resto / Discovery)

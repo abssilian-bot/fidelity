@@ -15,7 +15,8 @@
     "prisma:studio": "prisma studio",
     "seed": "tsx prisma/seed.ts",
     "build:render": "npm --prefix ../app ci --include=dev && npm --prefix ../app run build && npm run build",
-    "start:render": "prisma migrate deploy && npm start"
+    "start:render": "prisma migrate deploy && npm start",
+    "test:security": "node --test scripts/test-security.mjs"
   },
   "dependencies": {
     "@fastify/cors": "^11.1.0",
@@ -30,5 +31,8 @@
     "prisma": "^6.14.0",
     "tsx": "^4.20.4",
     "typescript": "^5.9.2"
+  },
+  "overrides": {
+    "deepmerge-ts": "8.0.0"
   }
 }

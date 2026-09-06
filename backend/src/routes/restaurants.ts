@@ -2,6 +2,8 @@ import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import type { PrismaClient, Prisma } from '@prisma/client'
 import { searchProfileFields } from '../lib/search-profile.js'
+import { safeImage, safeUrl } from '../lib/urls.js'
+import { balanceOf } from '../lib/ledger.js'
 
 const listQuery = z.object({
   diet: z.string().max(50).optional(),       // ex: "Halal"
@@ -18,9 +20,9 @@ const updateRestaurant = z
     address: z.string().max(200),
     district: z.string().max(50),
     diets: z.array(z.string().max(50)).max(10),
-    imageUrl: z.string().max(500),
-    menuPdfUrl: z.string().max(500).nullable(),
-    deliverooUrl: z.string().max(500).nullable(),
+    imageUrl: safeImage,
+    menuPdfUrl: safeUrl.nullable(),
+    deliverooUrl: safeUrl.nullable(),
     ...searchProfileFields,
   })
   .partial()
@@ -44,6 +46,9 @@ const publicSelect = {
 } satisfies Prisma.RestaurantSelect
 
 export function restaurantRoutes(app: FastifyInstance, prisma: PrismaClient) {
+  app.get('/owner/restaurants', { preHandler: app.authenticate }, async (req) => {
+    return prisma.restaurant.findMany({ where: { ownerId: req.userId }, select: { ...publicSelect, status: true, program: true }, orderBy: { createdAt: 'asc' } })
+  })
   // Liste publique des restos vérifiés (filtres : régime, quartier, recherche)
   app.get('/restaurants', async (req) => {
     const { diet, district, q } = listQuery.parse(req.query)
@@ -64,7 +69,7 @@ export function restaurantRoutes(app: FastifyInstance, prisma: PrismaClient) {
       },
       select: {
         ...publicSelect,
-        program: { select: { type: true, title: true, target: true, reward: true, rule: true, style: true } },
+        program: { select: { active: true, type: true, title: true, target: true, reward: true, rule: true, style: true } },
         reviews: { select: { rating: true } },
       },
       orderBy: { createdAt: 'asc' },
@@ -185,13 +190,19 @@ export function restaurantRoutes(app: FastifyInstance, prisma: PrismaClient) {
         membership: { select: { user: { select: { displayName: true, pseudo: true } } } },
       },
     })
+    const since = new Date(Date.now() - 7 * 86400_000)
+    const [newMembers, credits] = await Promise.all([
+      prisma.membership.count({ where: { restaurantId: id, createdAt: { gte: since } } }),
+      prisma.ledgerEntry.aggregate({ where: { membership: { restaurantId: id }, status: 'CONFIRMED', delta: { gt: 0 }, createdAt: { gte: since } }, _sum: { delta: true } }),
+    ])
     return {
-      members: memberships.map((m) => ({
+      stats: { newMembers, weeklyCredits: credits._sum.delta ?? 0, totalMembers: memberships.length },
+      members: await Promise.all(memberships.map(async (m) => ({
         membershipId: m.id,
         name: m.user.displayName ?? m.user.pseudo ?? 'Membre',
-        balance: m.entries[0]?.balanceAfter ?? 0,
+        balance: await balanceOf(prisma, m.id),
         lastActivityAt: m.entries[0]?.createdAt ?? m.createdAt,
-      })),
+      }))),
       recent: recent.map((entry) => ({
         id: entry.id,
         clientName: entry.membership.user.displayName ?? entry.membership.user.pseudo ?? 'Membre',

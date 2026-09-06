@@ -1,7 +1,7 @@
 // Test de bout en bout du flux FoodShare — usage :
 //   1. démarrer l'API (npm run dev ou node dist/server.js)
 //   2. node scripts/test-shares.mjs
-const BASE = 'http://localhost:3001'
+const BASE = process.env.TEST_API_URL || 'http://localhost:3001'
 let passed = 0, failed = 0
 
 function check(name, condition, extra = '') {
@@ -16,7 +16,7 @@ async function call(method, path, { token, body } = {}) {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: body ? JSON.stringify(body) : undefined,
+    body: body ? JSON.stringify(body) : method === 'POST' ? '{}' : undefined,
   })
   return { status: res.status, data: await res.json().catch(() => null) }
 }
@@ -58,9 +58,10 @@ const aminaCard = mine.data.find((m) => m.restaurant.slug === 'chez-amina')
 const balanceBefore = aminaCard.balance
 {
   // Le restaurateur crédite 1 coche = la commande qui débloque FoodShare
+  const qr = await call('POST', `/memberships/${aminaCard.id}/presentation`, { token: camilleToken })
   const earn = await call('POST', '/ledger/earn', {
     token: ownerToken,
-    body: { code: aminaCard.publicCode, delta: 1, idempotencyKey: `share-test-scan-${Date.now()}`, note: 'Déjeuner test FoodShare' },
+    body: { code: qr.data.code, restaurantId: amina.id, delta: 1, idempotencyKey: `share-test-scan-${Date.now()}`, note: 'Déjeuner test FoodShare' },
   })
   check('Scan commerçant → +1 coche', earn.status === 201, JSON.stringify(earn.data))
 
