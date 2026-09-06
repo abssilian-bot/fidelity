@@ -51,6 +51,8 @@ test('Un profil absent répond 404, sans compte de remplacement', async (t) => {
   assert.equal(calls[0].select.email, undefined)
   assert.equal(calls[0].select.memberships, undefined)
   assert.equal(calls[0].select.posts.where.status, 'PUBLISHED')
+  assert.equal(calls[0].select._count.select.followers, true)
+  assert.equal(calls[0].select._count.select.following, true)
 })
 
 async function restaurantApi(t, owner = 'owner') {

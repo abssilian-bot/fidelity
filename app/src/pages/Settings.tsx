@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { ChevronRight, Database, FlaskConical, LayoutGrid, RotateCcw, Star, Store, Trash2 } from 'lucide-react'
-import { userReviews, userVisits } from '../data'
+import { getMember, userReviews, userVisits } from '../data'
 import type { CommonProps } from '../nav'
 import { Tabs } from '../components/kit'
 import { AccountSection } from '../components/AccountSection'
+import { ProfileStats } from '../components/ProfileStats'
 import { getAccount } from '../lib/api'
 
 function UserProfileSummary({ onOpen, liked = 3, visits = 15, reviews = 2, onOpenLiked, onOpenVisits, onOpenReviews }: {
@@ -33,20 +34,14 @@ function UserProfileSummary({ onOpen, liked = 3, visits = 15, reviews = 2, onOpe
         Toujours partante pour une grande tablée, un bouillon réconfortant et les adresses qui prennent soin des
         végétariens.
       </p>
-      <div className="profile-stats four">
-        <span>
-          <strong>3</strong> publications
-        </span>
-        <button type="button" onClick={onOpenLiked}>
-          <strong>{liked}</strong> restaurants
-        </button>
-        <button type="button" onClick={onOpenVisits}>
-          <strong>{visits}</strong> visites
-        </button>
-        <button type="button" onClick={onOpenReviews}>
-          <strong>{reviews}</strong> avis
-        </button>
-      </div>
+      <ProfileStats stats={[
+        { label: 'publications', value: 3 },
+        { label: 'abonnés', value: getMember('camille')?.followers ?? 0 },
+        { label: 'abonnements', value: getMember('camille')?.following ?? 0 },
+        { label: 'restaurants', value: liked, onClick: onOpenLiked },
+        { label: 'visites', value: visits, onClick: onOpenVisits },
+        { label: 'avis', value: reviews, onClick: onOpenReviews },
+      ]} />
       <Tabs values={['Publications', 'À propos']} active="Publications" onChange={() => {}} />
       <div className="profile-grid">
         <img src="/images/table.webp" alt="" />

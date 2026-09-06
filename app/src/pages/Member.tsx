@@ -4,6 +4,7 @@ import { getMember, userReviews, userVisits } from '../data'
 import type { Member, UserReview, Visit } from '../data'
 import type { CommonProps } from '../nav'
 import { Tabs } from '../components/kit'
+import { ProfileStats } from '../components/ProfileStats'
 import { fetchPublicMember } from '../lib/api'
 
 interface MemberData {
@@ -228,22 +229,21 @@ export function MemberProfilePage({ go, memberId }: CommonProps & { memberId?: s
           <UserPlus size={18} /> {following ? `Vous suivez ${member.name.split(' ')[0]}` : `Suivre ${member.name.split(' ')[0]}`}
         </button>}
 
-        {member.source !== 'server' ? <div className="profile-stats four">
-          <span>
-            <strong>{member.posts}</strong> publications
-          </span>
-          <button type="button" onClick={() => go('likedRestaurants', { memberId: member.id })}>
-            <strong>{member.liked}</strong> restaurants
-          </button>
-          <button type="button" onClick={() => go('visits', { memberId: member.id })}>
-            <strong>{member.visits}</strong> visites
-          </button>
-          <button type="button" onClick={() => go('myReviews', { memberId: member.id })}>
-            <strong>{member.reviews}</strong> avis
-          </button>
-        </div> : failed ? <p className="muted">Impossible de charger les publications pour le moment.</p>
-          : !remote ? <p role="status" className="muted">Chargement du profil…</p>
-          : <p className="muted">{member.posts} publications publiques · {member.reviews} avis</p>}
+        {member.source === 'server' && failed ? <p className="muted">Impossible de charger les statistiques pour le moment.</p>
+          : member.source === 'server' && !remote ? <p role="status" className="muted">Chargement du profil…</p>
+          : <>
+            <ProfileStats stats={[
+              { label: 'publications', value: member.posts },
+              { label: 'abonnés', value: member.followers + (following ? 1 : 0) },
+              { label: 'abonnements', value: member.following },
+              ...(member.source !== 'server' ? [
+                { label: 'restaurants', value: member.liked, onClick: () => go('likedRestaurants', { memberId: member.id }) },
+                { label: 'visites', value: member.visits, onClick: () => go('visits', { memberId: member.id }) },
+                { label: 'avis', value: member.reviews, onClick: () => go('myReviews', { memberId: member.id }) },
+              ] : []),
+            ]} />
+            {member.source === 'server' && <p className="muted">{member.reviews} avis publiés</p>}
+          </>}
 
         <Tabs values={['Publications', 'À propos']} active={activeTab} onChange={setActiveTab} />
         {activeTab === 'Publications' ? (

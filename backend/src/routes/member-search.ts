@@ -46,7 +46,7 @@ export function memberSearchRoutes(app: FastifyInstance, prisma: PrismaClient) {
     ] }, select: {
       ...publicFields,
       posts: { where: { status: 'PUBLISHED' }, orderBy: { createdAt: 'desc' }, take: 12, select: { imageUrl: true } },
-      _count: { select: { posts: { where: { status: 'PUBLISHED' } }, reviews: true } },
+      _count: { select: { posts: { where: { status: 'PUBLISHED' } }, reviews: true, followers: true, following: true } },
     } })
     if (!member) return reply.code(404).send({ error: 'Profil introuvable.' })
     return member

@@ -37,12 +37,14 @@ test('Un profil serveur sans pseudo reste lisible, sans inventer de pseudo', asy
   t.after(() => { globalThis.fetch = original })
   globalThis.fetch = async url => {
     assert.ok(url.endsWith('/members/auteur-sans-pseudo'))
-    return Response.json({ id: 'auteur-sans-pseudo', displayName: null, pseudo: null, bio: null, posts: [{ imageUrl: '/images/table.webp' }], _count: { posts: 1, reviews: 0 } })
+    return Response.json({ id: 'auteur-sans-pseudo', displayName: null, pseudo: null, bio: null, posts: [{ imageUrl: '/images/table.webp' }], _count: { posts: 1, reviews: 0, followers: 12, following: 7 } })
   }
   const member = await fetchPublicMember('auteur-sans-pseudo', new AbortController().signal)
   assert.equal(member.name, 'Membre Fidelity')
   assert.equal(member.handle, '')
   assert.equal(member.posts, 1)
+  assert.equal(member.followers, 12)
+  assert.equal(member.following, 7)
   assert.equal(getMember(member.id).id, member.id)
 })
 test('API indisponible : aucun profil de démonstration ne remplace la personne', async t => {

@@ -685,9 +685,14 @@ textarea { resize: vertical; }
 .profile-identity > span:last-child { display: flex; flex-direction: column; gap: 1px; }
 .profile-identity small { color: var(--muted-soft); }
 .profile-identity em { font-style: normal; font-size: 12.5px; color: var(--muted-soft); }
-.profile-stats { display: flex; justify-content: space-around; padding: 6px 0 2px; }
-.profile-stats span { font-size: 13.5px; color: var(--muted-soft); }
-.profile-stats strong { color: var(--ink); font-size: 15px; margin-right: 3px; }
+.profile-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 8px; padding: 10px 0 2px; }
+.profile-stats > div, .profile-stats > button {
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 4px;
+  min-width: 0; margin: 0; padding: 4px 0; border: 0; background: none; text-align: center; font: inherit;
+}
+.profile-stats > :nth-child(n + 4) { border-top: 1px solid var(--line); padding-top: 16px; }
+.profile-stats span { font-size: 12.5px; line-height: 1.4; color: var(--muted-soft); }
+.profile-stats strong { color: var(--ink); font-size: 20px; line-height: 1.2; font-weight: 700; font-variant-numeric: tabular-nums; }
 .profile-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .profile-grid img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 14px; }
 
@@ -833,13 +838,10 @@ textarea { resize: vertical; }
 .search-results h2 { font-size: 17px; margin-bottom: 2px; }
 .member-avatar { font-weight: 700; font-size: 13px; }
 
-.profile-stats.four { gap: 4px; }
 .profile-stats button {
-  background: none; border: none; cursor: pointer; padding: 4px 2px; font: inherit;
-  font-size: 13.5px; color: var(--muted-soft); border-radius: 10px;
-  transition: color 0.15s ease;
+  cursor: pointer; transition: color 0.15s ease;
 }
-.profile-stats button:hover { color: var(--orange); }
+.profile-stats button:hover strong, .profile-stats button:hover span { color: var(--orange); }
 .profile-stats button:active { transform: scale(0.97); }
 
 .profile-identity.static { cursor: default; }

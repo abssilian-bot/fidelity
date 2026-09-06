@@ -554,6 +554,8 @@ export interface Member {
   initials: string
   bio: string
   posts: number
+  followers: number
+  following: number
   liked: number
   visits: number
   reviews: number
@@ -594,6 +596,8 @@ export const members: Member[] = [
     id: 'camille',
     name: 'Camille Robert',
     handle: '@camilleatable',
+    followers: 128,
+    following: 64,
     initials: 'CR',
     bio: 'Toujours partante pour une grande tablée, un bouillon réconfortant et les adresses qui prennent soin des végétariens.',
     posts: 3,
@@ -616,6 +620,8 @@ export const members: Member[] = [
     id: 'sarah',
     name: 'Sarah L.',
     handle: '@sarahatable',
+    followers: 246,
+    following: 92,
     initials: 'SL',
     bio: 'Chasseuse de tajines et de brunchs au soleil.',
     posts: 8,
@@ -638,6 +644,8 @@ export const members: Member[] = [
     id: 'mehdi',
     name: 'Mehdi B.',
     handle: '@mehdibouge',
+    followers: 87,
+    following: 53,
     initials: 'MB',
     bio: 'Paris 11e, couscous le vendredi, ramen le dimanche.',
     posts: 5,
@@ -658,6 +666,8 @@ export const members: Member[] = [
     id: 'lea',
     name: 'Léa P.',
     handle: '@leagoutte',
+    followers: 312,
+    following: 118,
     initials: 'LP',
     bio: 'Végétarienne curieuse, toujours un avis à partager.',
     posts: 12,
@@ -681,6 +691,8 @@ export const members: Member[] = [
     id: 'eliott',
     name: 'Eliott M.',
     handle: '@eliottmange',
+    followers: 74,
+    following: 41,
     initials: 'EM',
     bio: 'Ramen, bols et tout ce qui mijote doucement.',
     posts: 4,
@@ -701,6 +713,7 @@ export const members: Member[] = [
 
 // Le troisième auteur des FoodShare de démonstration a aussi un profil accessible.
 members.push({ id: 'hugo', name: 'Hugo D.', handle: '@hugoatable', initials: 'HD',
+  followers: 36, following: 28,
   bio: 'Toujours à la recherche d’une bonne table de quartier.', posts: 1, liked: 0, visits: 0, reviews: 0,
   likedRestaurants: [], visitList: [], reviewList: [], photos: ['/images/ramen.webp'],
 })

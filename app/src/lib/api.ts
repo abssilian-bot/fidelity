@@ -610,12 +610,13 @@ export async function publishProfile(
 
 interface ApiMember {
   id: string; displayName: string | null; pseudo: string | null; bio: string | null; avatarUrl: string | null
-  posts?: Array<{ imageUrl: string }>; _count?: { posts: number; reviews: number }
+  posts?: Array<{ imageUrl: string }>; _count?: { posts: number; reviews: number; followers: number; following: number }
 }
 function mapMember(member: ApiMember): Member {
   const name = member.displayName || member.pseudo || 'Membre Fidelity'
   return { id: member.id, source: 'server', name, handle: member.pseudo ? `@${member.pseudo}` : '', initials: name.split(' ').map((part) => part[0]).join('').slice(0, 2),
     bio: member.bio ?? '', posts: member._count?.posts ?? 0, reviews: member._count?.reviews ?? 0,
+    followers: member._count?.followers ?? 0, following: member._count?.following ?? 0,
     liked: 0, visits: 0, likedRestaurants: [], visitList: [], reviewList: [], photos: member.posts?.map((post) => post.imageUrl) ?? [],
   }
 }
