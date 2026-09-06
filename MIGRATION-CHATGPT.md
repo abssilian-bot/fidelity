@@ -1,5 +1,7 @@
 # 🚀 Migration ChatGPT — Fidelity (« On mange quoi »)
 
+> **Correction Discovery du 6 septembre 2026 :** pseudo, avatar et nom dans le texte ouvrent le profil de l’auteur. Les FoodShare transportent son identifiant serveur ; le restaurant identifié reste accessible par son lien dédié. Un profil public est chargé directement, même sans passage par la recherche. Aucun e-mail n’est exposé. Vérification : `cd app && node scripts/test-discovery.mjs` (7 scénarios), FoodShare (20), sécurité (26).
+
 > **Mise à jour sécurité et caisse du 6 septembre 2026 :** lire [SECURITE-ET-SCAN.md](SECURITE-ET-SCAN.md). Le scan caméra/code temporaire est branché au registre serveur ; les QR sont valables deux minutes et à usage unique. Les sections historiques ci-dessous décrivent aussi des éléments de démonstration.
 
 > **À lire en premier.** Ce fichier explique comment transférer le projet dans ChatGPT.

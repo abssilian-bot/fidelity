@@ -609,12 +609,12 @@ export async function publishProfile(
 }
 
 interface ApiMember {
-  id: string; displayName: string | null; pseudo: string; bio: string | null; avatarUrl: string | null
+  id: string; displayName: string | null; pseudo: string | null; bio: string | null; avatarUrl: string | null
   posts?: Array<{ imageUrl: string }>; _count?: { posts: number; reviews: number }
 }
 function mapMember(member: ApiMember): Member {
-  const name = member.displayName || member.pseudo
-  return { id: member.id, source: 'server', name, handle: `@${member.pseudo}`, initials: name.split(' ').map((part) => part[0]).join('').slice(0, 2),
+  const name = member.displayName || member.pseudo || 'Membre Fidelity'
+  return { id: member.id, source: 'server', name, handle: member.pseudo ? `@${member.pseudo}` : '', initials: name.split(' ').map((part) => part[0]).join('').slice(0, 2),
     bio: member.bio ?? '', posts: member._count?.posts ?? 0, reviews: member._count?.reviews ?? 0,
     liked: 0, visits: 0, likedRestaurants: [], visitList: [], reviewList: [], photos: member.posts?.map((post) => post.imageUrl) ?? [],
   }
@@ -678,7 +678,7 @@ interface ApiShare {
   rating: number | null
   status: 'PENDING' | 'PUBLISHED' | 'REJECTED'
   createdAt: string
-  author?: { displayName?: string; pseudo?: string; avatarUrl?: string } | null
+  author?: { id: string; displayName?: string; pseudo?: string; avatarUrl?: string } | null
   restaurant?: { id: string; name: string; slug: string } | null
 }
 
@@ -703,6 +703,7 @@ function mapShare(post: ApiShare, restaurantId: string): Share {
     id: numericId(post.id),
     backendId: post.id,
     restaurantId,
+    memberId: post.author?.id,
     author,
     initials: initialsOf(author),
     image: post.imageUrl,

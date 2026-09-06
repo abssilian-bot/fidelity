@@ -31,7 +31,7 @@ const decideSchema = z.object({
 
 const postSelect = {
   id: true, imageUrl: true, caption: true, rating: true, status: true, createdAt: true,
-  author: { select: { displayName: true, pseudo: true, avatarUrl: true } },
+  author: { select: { id: true, displayName: true, pseudo: true, avatarUrl: true } },
 } as const
 
 export function shareRoutes(app: FastifyInstance, prisma: PrismaClient) {

@@ -309,6 +309,7 @@ function App() {
         id: Date.now(),
         restaurantId: input.restaurantId,
         author: 'Camille Robert',
+        memberId: 'camille',
         initials: 'CR',
         image: input.image,
         caption: input.caption,
@@ -553,7 +554,7 @@ function App() {
       page = <MyReviewsPage {...common} memberId={route.memberId} />
       break
     case 'memberProfile':
-      page = <MemberProfilePage {...common} memberId={route.memberId} />
+      page = <MemberProfilePage key={route.memberId} {...common} memberId={route.memberId} />
       break
     case 'foodshareCompose':
       page = <FoodshareComposePage {...common} restaurant={resolveRestaurant(route.restaurantId || 'amina')} />

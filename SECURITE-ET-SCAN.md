@@ -40,9 +40,10 @@ En cas de coupure, le bouton **Vérifier et terminer** réutilise la même réf�
 ## Vérifications
 
 - Backend : TypeScript sans erreur ; génération Prisma et migrations sur PostgreSQL réel.
-- API sans Resend : `test-api.mjs` **27** et `test-shares.mjs` **18**.
-- `test-security.mjs` : **25 scénarios**, avec de nombreuses requêtes par scénario : sessions, accès croisés, plafonds, QR, courses entre transactions, FoodShare atomique, URL, fichiers privés, CORS, corps excessifs et accès SQL anonyme.
+- API sans Resend : `test-api.mjs` **27** et `test-shares.mjs` **20** (dont identité et profil public de l’auteur).
+- `test-security.mjs` : **26 scénarios**, avec de nombreuses requêtes par scénario : sessions, accès croisés, plafonds, QR, courses entre transactions, FoodShare atomique, profil public sans pseudo, URL, fichiers privés, CORS, corps excessifs et accès SQL anonyme.
 - Tests ciblés : auth **10**, adhésions **5**, recherche serveur **9** ; compte frontend **10**, recherche **50**, cartes **6**, reprise scan **3**.
+- Discovery : **7** scénarios sur les destinations des auteurs, les identifiants serveur, les profils absents et le repli hors connexion.
 - Interface locale : crédit avec reçu, coupure réelle de l'API puis reprise, affichage du QR et du solde côté membre. Cet ordinateur n'expose aucune caméra : la prise de vue physique reste à essayer sur iPhone/Android en HTTPS.
 
 `test-security.mjs` refuse une API distante ou une base dont le nom ne commence pas par `fidelity_security_`. Fournir DATABASE_URL, APP_SECRET et TEST_API_URL d'une base jetable migrée et d'une API lancée sur cette même base. Les scripts historiques acceptent aussi TEST_API_URL ; ils exigent un seed frais et ne doivent pas tourner sur la production.

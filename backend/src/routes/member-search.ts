@@ -38,7 +38,12 @@ export function memberSearchRoutes(app: FastifyInstance, prisma: PrismaClient) {
 
   app.get('/members/:id', async (req, reply) => {
     const { id } = z.object({ id: z.string().min(1).max(40) }).parse(req.params)
-    const member = await prisma.user.findFirst({ where: { id, role: 'MEMBER', pseudo: { not: null } }, select: {
+    // Un auteur de publication publique reste accessible même sans pseudo.
+    // Les comptes sans profil public ni publication restent hors de cet accès.
+    const member = await prisma.user.findFirst({ where: { id, OR: [
+      { role: 'MEMBER', pseudo: { not: null } },
+      { posts: { some: { status: 'PUBLISHED' } } },
+    ] }, select: {
       ...publicFields,
       posts: { where: { status: 'PUBLISHED' }, orderBy: { createdAt: 'desc' }, take: 12, select: { imageUrl: true } },
       _count: { select: { posts: { where: { status: 'PUBLISHED' } }, reviews: true } },

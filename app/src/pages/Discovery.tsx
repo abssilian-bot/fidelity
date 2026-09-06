@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { BadgeCheck, Bookmark, ChevronRight, Clock3, Heart, MessageCircle, Plus, Send, Store, X } from 'lucide-react'
-import { feedPosts, getRestaurant, members, stories } from '../data'
-import type { FeedPost, Restaurant } from '../data'
+import { feedPosts, members, stories } from '../data'
+import type { Restaurant } from '../data'
 import type { CommonProps, SearchFilters } from '../nav'
 import { QuickFilters, SearchBox } from '../components/SearchControls'
 import { SearchFacets } from './Search'
@@ -9,29 +9,18 @@ import { activeFilterCount, defaultSearchFilters, normalizeSearch, searchMembers
 import { useRestaurantSearch } from '../hooks/use-search'
 import { useMemberSearch } from '../hooks/use-member-search'
 import { getBackendState } from '../lib/api'
+import { feedAuthorRoute, shareToFeedPost } from '../lib/feed'
 
 const DISCOVERY_TABS = ['Pour vous', 'Nouveautés', 'Proximité']
 
-/** Les FoodShare validés par les restaurants rejoignent le fil public. */
-const shareToFeedPost = (share: { id: number; restaurantId: string; author: string; image: string; caption: string; time: string }): FeedPost => ({
-  id: share.id + 1_000_000,
-  restaurantId: share.restaurantId,
-  author: share.author,
-  verified: false,
-  image: share.image,
-  likes: 0,
-  text: share.caption || 'A partagé sa visite via FoodShare.',
-  time: share.time,
-})
-
-export function DiscoveryPage({ go, notify, restaurants, sharedPosts = [], filters, setFilters, scope, setScope }: CommonProps & {
+export function DiscoveryPage({ go, notify, resolveRestaurant, restaurants, sharedPosts = [], filters, setFilters, scope, setScope }: CommonProps & {
   restaurants: Restaurant[]; filters: SearchFilters; setFilters: (filters: SearchFilters) => void
   scope: 'all' | 'restaurants' | 'members'; setScope: (scope: 'all' | 'restaurants' | 'members') => void
 }) {
   const [activeTab, setActiveTab] = useState('Pour vous')
   const [likedPosts, setLikedPosts] = useState<Set<number>>(new Set([1]))
   const [savedPosts, setSavedPosts] = useState<Set<number>>(new Set())
-  const [followed, setFollowed] = useState<Set<string>>(new Set(['casa']))
+  const [followed, setFollowed] = useState<Set<string>>(new Set(['restaurant:casa']))
   const [noticeVisible, setNoticeVisible] = useState(true)
   const [showFilters, setShowFilters] = useState(false)
   const query = filters.query
@@ -188,17 +177,23 @@ export function DiscoveryPage({ go, notify, restaurants, sharedPosts = [], filte
 
       {visiblePosts.length ? (
         visiblePosts.map((post) => {
-          const restaurant = getRestaurant(post.restaurantId)
+          const restaurant = resolveRestaurant(post.restaurantId)
           const liked = likedPosts.has(post.id)
           const saved = savedPosts.has(post.id)
-          const isFollowing = followed.has(post.restaurantId)
+          const authorRoute = feedAuthorRoute(post)
+          const authorKey = post.authorType === 'member' ? `member:${post.memberId}` : `restaurant:${post.restaurantId}`
+          const isFollowing = followed.has(authorKey)
+          const openAuthor = () => {
+            if (authorRoute) go(authorRoute.name, authorRoute)
+            else notify('Le profil de cette personne n’est plus disponible.')
+          }
           return (
             <article className="feed-post" key={post.id}>
               <header>
-                <span className="avatar" style={{ backgroundImage: `url(${post.image})` }}>
+                <button type="button" className="avatar" aria-label={`Voir le compte de ${post.author}`} onClick={openAuthor} style={{ backgroundImage: `url(${post.image})` }}>
                   {!post.image && post.author.slice(0, 1)}
-                </span>
-                <button type="button" onClick={() => go('restaurant', { restaurantId: post.restaurantId })}>
+                </button>
+                <button type="button" onClick={openAuthor}>
                   <strong>
                     {post.author}
                     {post.verified && <BadgeCheck size={16} className="verified" fill="currentColor" stroke="#fbf5ed" />}
@@ -208,7 +203,8 @@ export function DiscoveryPage({ go, notify, restaurants, sharedPosts = [], filte
                 <button
                   className={`follow-button ${isFollowing ? 'following' : ''}`}
                   type="button"
-                  onClick={() => toggleFollow(post.restaurantId)}
+                  disabled={!authorRoute}
+                  onClick={() => toggleFollow(authorKey)}
                 >
                   {isFollowing ? 'Suivi' : 'Suivre'}
                 </button>
@@ -233,7 +229,7 @@ export function DiscoveryPage({ go, notify, restaurants, sharedPosts = [], filte
               <div className="post-copy">
                 <strong>{post.likes + (liked ? 1 : 0)} coups de cœur</strong>
                 <p>
-                  <b>{post.author}</b> {post.text}
+                  <button className="post-author" type="button" onClick={openAuthor}>{post.author}</button> {post.text}
                 </p>
                 <button type="button" onClick={() => go('restaurant', { restaurantId: post.restaurantId })}>
                   Voir la fiche de {restaurant.name}

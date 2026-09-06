@@ -171,13 +171,15 @@ export function MyReviewsPage({ go, favorites, resolveRestaurant, memberId, myRe
 
 /** Profil public d'un membre — même présentation que notre propre profil. */
 export function MemberProfilePage({ go, memberId }: CommonProps & { memberId?: string }) {
-  const cachedMember = getMember(memberId || 'camille')
+  const cachedMember = memberId ? getMember(memberId) : undefined
+  const needsRemote = !!memberId && (!cachedMember || cachedMember.source === 'server')
   const [remote, setRemote] = useState<Member | null>(null)
   const [failed, setFailed] = useState(false)
+  const [attempt, setAttempt] = useState(0)
   const [following, setFollowing] = useState(false)
   const [activeTab, setActiveTab] = useState('Publications')
   useEffect(() => {
-    if (cachedMember?.source !== 'server' || !memberId) return
+    if (!needsRemote || !memberId) return
     const controller = new AbortController()
     fetchPublicMember(memberId, controller.signal).then((member) => {
       if (controller.signal.aborted) return
@@ -185,9 +187,14 @@ export function MemberProfilePage({ go, memberId }: CommonProps & { memberId?: s
       else setFailed(true)
     })
     return () => controller.abort()
-  }, [memberId, cachedMember?.source])
+  }, [memberId, needsRemote, attempt])
   const member = remote?.id === memberId ? remote : cachedMember
-  if (!member) return <main className="page"><h1>Profil introuvable</h1><p>Ce profil n’est plus disponible.</p></main>
+  if (!member) return <main className="page">
+    {needsRemote && !failed ? <p role="status">Chargement du profil…</p> : <>
+      <h1>Profil indisponible</h1><p>Ce profil n’est pas accessible pour le moment.</p>
+      {memberId && <button className="outline-button" type="button" onClick={() => { setFailed(false); setAttempt(value => value + 1) }}>Réessayer</button>}
+    </>}
+  </main>
 
   return (
     <main className="page">

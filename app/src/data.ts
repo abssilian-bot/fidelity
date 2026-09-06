@@ -95,6 +95,8 @@ export interface Restaurant {
 export interface FeedPost {
   id: number
   restaurantId: string
+  authorType: 'member' | 'restaurant'
+  memberId?: string
   author: string
   handle?: string
   verified: boolean
@@ -448,6 +450,7 @@ export const feedPosts: FeedPost[] = [
   {
     id: 1,
     restaurantId: 'casa',
+    authorType: 'restaurant',
     author: 'Casa Verde',
     verified: true,
     image: '/images/tacos.webp',
@@ -458,6 +461,8 @@ export const feedPosts: FeedPost[] = [
   {
     id: 2,
     restaurantId: 'amina',
+    authorType: 'member',
+    memberId: 'camille',
     author: 'Camille R.',
     handle: '@camilleatable · Chez Amina',
     verified: false,
@@ -469,6 +474,7 @@ export const feedPosts: FeedPost[] = [
   {
     id: 3,
     restaurantId: 'miso',
+    authorType: 'restaurant',
     author: 'Atelier Miso',
     verified: true,
     image: '/images/ramen.webp',
@@ -479,6 +485,7 @@ export const feedPosts: FeedPost[] = [
   {
     id: 4,
     restaurantId: 'rizrouge',
+    authorType: 'restaurant',
     author: 'Riz Rouge',
     verified: true,
     image: '/images/ramen.webp',
@@ -489,6 +496,7 @@ export const feedPosts: FeedPost[] = [
   {
     id: 5,
     restaurantId: 'braise',
+    authorType: 'restaurant',
     author: 'Braise & Basilic',
     verified: true,
     image: '/images/tacos.webp',
@@ -691,6 +699,12 @@ export const members: Member[] = [
   },
 ]
 
+// Le troisième auteur des FoodShare de démonstration a aussi un profil accessible.
+members.push({ id: 'hugo', name: 'Hugo D.', handle: '@hugoatable', initials: 'HD',
+  bio: 'Toujours à la recherche d’une bonne table de quartier.', posts: 1, liked: 0, visits: 0, reviews: 0,
+  likedRestaurants: [], visitList: [], reviewList: [], photos: ['/images/ramen.webp'],
+})
+
 const serverMembers = new Map<string, Member>()
 export const cacheMembers = (items: Member[]) => items.forEach((member) => serverMembers.set(member.id, member))
 export const getMember = (id: string): Member | undefined => serverMembers.get(id) ?? members.find((member) => member.id === id)
@@ -744,6 +758,7 @@ export const setRecentScans = (scans: ScanEvent[]) => {
 export interface SharedPost {
   id: number
   restaurantId: string
+  memberId?: string
   author: string
   initials: string
   image: string
@@ -753,7 +768,7 @@ export interface SharedPost {
 }
 
 /** Partages FoodShare de démonstration — en attente de validation restaurateur. */export const pendingSharesSeed: SharedPost[] = [
-  { id: 1, restaurantId: 'amina', author: 'Camille Robert', initials: 'CR', image: '/images/table.webp', caption: 'Le couscous du vendredi qui met tout le monde d’accord.', rating: 5, time: 'Il y a 1 h' },
-  { id: 2, restaurantId: 'amina', author: 'Léa P.', initials: 'LP', image: '/images/tacos.webp', caption: 'Une table de quartier comme on les aime.', rating: 4, time: 'Il y a 4 h' },
-  { id: 3, restaurantId: 'amina', author: 'Hugo D.', initials: 'HD', image: '/images/ramen.webp', caption: 'Tajine citron validé à 100 %.', rating: 5, time: 'Hier à 21:03' },
+  { id: 1, restaurantId: 'amina', memberId: 'camille', author: 'Camille Robert', initials: 'CR', image: '/images/table.webp', caption: 'Le couscous du vendredi qui met tout le monde d’accord.', rating: 5, time: 'Il y a 1 h' },
+  { id: 2, restaurantId: 'amina', memberId: 'lea', author: 'Léa P.', initials: 'LP', image: '/images/tacos.webp', caption: 'Une table de quartier comme on les aime.', rating: 4, time: 'Il y a 4 h' },
+  { id: 3, restaurantId: 'amina', memberId: 'hugo', author: 'Hugo D.', initials: 'HD', image: '/images/ramen.webp', caption: 'Tajine citron validé à 100 %.', rating: 5, time: 'Hier à 21:03' },
 ]

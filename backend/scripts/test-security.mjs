@@ -163,6 +163,26 @@ test('FoodShare : une seule publication par visite, y compris simultanément', a
   const saved = await prisma.post.findUnique({ where: { id: post.id } })
   assert.equal(await balance(target), saved.status === 'PUBLISHED' ? 3 : 1)
 })
+test('Profil public sans pseudo : accessible depuis un post publié, sans données privées', async () => {
+  const client = await user(), target = await newCard(client)
+  assert.equal((await request('GET', `/members/${client.id}`)).status, 404)
+  await request('POST', '/ledger/earn', owner, input(await qr(target, client), 1))
+  const post = (await request('POST', '/shares', client, { slug: restaurant.slug, imageUrl: '/images/table.webp', rating: 5 })).data
+  assert.equal((await request('GET', `/members/${client.id}`)).status, 404)
+  assert.equal((await request('POST', `/shares/${post.id}/decide`, owner, { publish: true, rewardDelta: 0 })).status, 200)
+  const feed = await request('GET', `/restaurants/${restaurant.slug}/shares/public`)
+  const author = feed.data.find(item => item.id === post.id).author
+  assert.equal(author.id, client.id)
+  const profile = await request('GET', `/members/${author.id}`)
+  assert.equal(profile.status, 200)
+  assert.equal(profile.data.id, client.id)
+  assert.equal(profile.data.pseudo, null)
+  assert.deepEqual(profile.data.posts, [{ imageUrl: '/images/table.webp' }])
+  for (const privateField of ['email', 'role', 'memberships', 'publicCode']) {
+    assert.equal(privateField in author, false)
+    assert.equal(privateField in profile.data, false)
+  }
+})
 test('Erreur de crédit FoodShare : publication entièrement annulée', async () => {
   const client = await user(), target = await newCard(client)
   await request('POST', '/ledger/earn', owner, input(await qr(target, client), 1))

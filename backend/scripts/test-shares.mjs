@@ -114,6 +114,11 @@ console.log('\n── 4. Visibilité publique et profil membre ──')
 {
   const pub = await call('GET', '/restaurants/chez-amina/shares/public')
   check('Fil public → le partage republié est visible', pub.data?.some((p) => p.id === shareId))
+  const author = pub.data?.find((p) => p.id === shareId)?.author
+  const me = await call('GET', '/auth/me', { token: camilleToken })
+  check('Le fil fournit l’identifiant réel de l’auteur, sans e-mail', !!author?.id && author.id === me.data?.id && !('email' in author))
+  const profile = await call('GET', `/members/${author?.id}`)
+  check('L’auteur ouvre son profil public et ses publications', profile.status === 200 && profile.data?.id === author?.id && profile.data?.posts?.length > 0 && !('email' in profile.data))
 
   const mineShares = await call('GET', '/shares/mine', { token: camilleToken })
   const mineFound = mineShares.data?.find((p) => p.id === shareId)
