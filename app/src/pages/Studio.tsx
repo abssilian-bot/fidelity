@@ -42,7 +42,6 @@ export function ProfileEditorPage({ go, draft, setDraft, menu, setMenu, offers =
   restaurantId?: string
 }) {
   const [selectedItem, setSelectedItem] = useState(0)
-  const [selectedPhoto, setSelectedPhoto] = useState(0)
   const [selectedOffer, setSelectedOffer] = useState(0)
   const [publishing, setPublishing] = useState(false)
 
@@ -155,17 +154,16 @@ export function ProfileEditorPage({ go, draft, setDraft, menu, setMenu, offers =
       <SearchProfileEditor value={draft} onChange={(profile) => setDraft({ ...draft, ...profile })} />
 
       <section className="gallery-draft">
-        <h3 style={{ margin: 0 }}>Galerie — aperçu du brouillon</h3>
-        <p>Choisissez la couverture locale à prévisualiser. Aucun fichier n’est téléversé ni publié.</p>
+        <h3 style={{ margin: 0 }}>Photo de couverture</h3>
+        <p>Ces photos d’exemple permettent de préparer la couverture. Publiez le profil pour enregistrer votre choix.</p>
         <div>
-          {['Photo 1', 'Photo 2'].map((label, index) => (
-            <button key={label} type="button" className={selectedPhoto === index ? 'selected' : ''} onClick={() => setSelectedPhoto(index)}>
-              {selectedPhoto === index && <Check size={14} />} {label}
+          {[['Table', '/images/table.webp'], ['Cuisine', '/images/tacos.webp']].map(([label, image]) => (
+            <button key={image} type="button" aria-pressed={draft.image === image} className={draft.image === image ? 'selected' : ''} onClick={() => setDraft({ ...draft, image })}>
+              {draft.image === image && <Check size={14} />} {label}
             </button>
           ))}
         </div>
-        <p style={{ fontSize: 12 }}>Valeur du brouillon : {selectedPhoto === 0 ? 'chez-amina-hero' : 'chez-amina-table'}</p>
-        <img src={selectedPhoto === 0 ? '/images/table.webp' : '/images/tacos.webp'} alt="" />
+        <img src={draft.image} alt="Aperçu de la couverture" />
       </section>
 
       <button
@@ -183,7 +181,7 @@ export function ProfileEditorPage({ go, draft, setDraft, menu, setMenu, offers =
           <div>
             <h2 style={{ margin: 0 }}>Éditeur de menu</h2>
             <p className="muted" style={{ margin: 0, fontSize: 13.5 }}>
-              Prévisualisez chaque modification, puis publiez-la localement sans serveur ni envoi externe.
+              Préparez votre menu, puis publiez-le pour le rendre visible à vos clients.
             </p>
           </div>
           <button className="outline-button" type="button" onClick={addDish}>
@@ -582,8 +580,10 @@ export function QrPosterPage({ restaurant }: CommonProps & { restaurant: Restaur
     if (!qr.current) return
     const blob = new Blob([new XMLSerializer().serializeToString(qr.current)], { type: 'image/svg+xml' })
     const href = URL.createObjectURL(blob), link = document.createElement('a')
-    link.href = href; link.download = `Fidelity-QR-${restaurant.id}.svg`; link.click()
-    window.setTimeout(() => URL.revokeObjectURL(href), 1000)
+    link.href = href; link.download = `Fidelity-QR-${restaurant.id}.svg`
+    document.body.appendChild(link)
+    link.click(); link.remove()
+    window.setTimeout(() => URL.revokeObjectURL(href), 30_000)
   }
   return (
     <main className="page qr-poster-page">
