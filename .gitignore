@@ -36,3 +36,10 @@ scripts/build_budget_berlin.py
 # Exports historiques privés
 **/FIDELITY-CODE-COMPLET.md
 **/fidelity-projet.zip
+**/certs/
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/*.cer
+**/*.certSigningRequest

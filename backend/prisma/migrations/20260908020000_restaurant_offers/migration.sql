@@ -1,0 +1,1 @@
+ALTER TABLE "Restaurant" ADD COLUMN "offers" JSONB NOT NULL DEFAULT '[]';

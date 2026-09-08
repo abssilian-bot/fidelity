@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Check, ChevronRight, Gift, LoaderCircle, ScanLine } from 'lucide-react'
 import type { CommonProps } from '../nav'
 import { QrCamera } from '../components/QrCamera'
+import { QrImageInput } from '../components/QrImageInput'
 import { commitScan, fetchOwnedRestaurants, getAccount, resolveScannedCard } from '../lib/api'
 import type { OwnedRestaurant, ScannedCard, ScanReceipt } from '../lib/api'
 import { forgetScan, parseCardCode, readPendingScan, rememberScan } from '../lib/scan'
@@ -21,6 +22,7 @@ export function ScanPage({ go, restaurantId }: CommonProps & { restaurantId: str
   const [amount, setAmount] = useState('1')
   const [pending, setPending] = useState<PendingScan | null>(() => readPendingScan(accountId))
   const [receipt, setReceipt] = useState<ScanReceipt | null>(null)
+  const [receiptUnit, setReceiptUnit] = useState<'STAMPS' | 'POINTS'>('POINTS')
   const [client, setClient] = useState('')
   const [cameraVersion, setCameraVersion] = useState(0)
   const [rewardConfirm, setRewardConfirm] = useState(false)
@@ -40,7 +42,7 @@ export function ScanPage({ go, restaurantId }: CommonProps & { restaurantId: str
     try {
       const normalized = parseCardCode(value)
       const result = await resolveScannedCard(normalized, place)
-      setCode(normalized); setCard(result); setAmount(result.program.type === 'STAMPS' ? '1' : '10')
+      setCode(result.code || normalized); setCard(result); setAmount(result.program.type === 'STAMPS' ? '1' : '10')
       setClient(result.member.displayName || result.member.pseudo || 'Client Fidelity')
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'QR illisible. Réessaie.'); setCameraVersion(v => v + 1) }
     finally { working.current = false; setBusy(false) }
@@ -51,11 +53,11 @@ export function ScanPage({ go, restaurantId }: CommonProps & { restaurantId: str
     try {
       const input: PendingScan = pending || {
         accountId, restaurantId: card!.restaurant.id, operation, code, delta: operation === 'earn' ? Number(amount) : undefined,
-        idempotencyKey: crypto.randomUUID(), clientName: client, createdAt: Date.now(),
+        idempotencyKey: crypto.randomUUID(), clientName: client, createdAt: Date.now(), unit: card!.program.type,
       }
       rememberScan(input); setPending(input)
       const result = await commitScan(input)
-      forgetScan(); setPending(null); setReceipt(result); setClient(input.clientName)
+      forgetScan(); setPending(null); setReceipt(result); setClient(input.clientName); setReceiptUnit(input.unit || 'POINTS')
       window.dispatchEvent(new Event('fidelity:ledger-updated'))
     } catch (cause) {
       const status = cause && typeof cause === 'object' && 'status' in cause ? Number(cause.status) : 0
@@ -63,7 +65,7 @@ export function ScanPage({ go, restaurantId }: CommonProps & { restaurantId: str
       setError(cause instanceof Error ? cause.message : 'Confirmation indisponible. Réessaie cette même opération.')
     } finally { working.current = false; setBusy(false) }
   }
-  const stamps = card?.program.type === 'STAMPS'
+  const stamps = (receipt ? receiptUnit : card?.program.type) === 'STAMPS'
   const validAmount = /^\d+$/.test(amount) && Number(amount) >= 1 && Number(amount) <= (stamps ? 10 : 1000)
   return <main className="page scan-page">
     <span className="eyebrow">En caisse</span><h1>Scanner un client</h1>
@@ -94,13 +96,15 @@ export function ScanPage({ go, restaurantId }: CommonProps & { restaurantId: str
           <div className="scan-presets">{(stamps ? [1, 2, 3] : [10, 50, 100]).map(value => <button key={value} type="button" className={amount === String(value) ? 'selected' : ''} disabled={busy} onClick={() => setAmount(String(value))}>+{value}</button>)}</div>
           <input id="scan-amount" type="number" inputMode="numeric" min={1} max={stamps ? 10 : 1000} step={1} value={amount} disabled={busy} onChange={event => setAmount(event.target.value)} />
           <button className="primary-button full scan-submit" type="button" disabled={busy || !validAmount} onClick={() => void submit('earn')}><Check size={20} /> {busy ? 'Enregistrement…' : `Ajouter ${validAmount ? amount : '…'} ${stamps ? 'coche' + (Number(amount) > 1 ? 's' : '') : 'points'}`}</button>
-          {card.balance >= card.program.target && <button className="outline-button full" type="button" disabled={busy} onClick={() => setRewardConfirm(true)}><Gift size={18} /> Utiliser une récompense</button>}
+          {!card.earnOnly && card.balance >= card.program.target && <button className="outline-button full" type="button" disabled={busy} onClick={() => setRewardConfirm(true)}><Gift size={18} /> Utiliser une récompense</button>}
+          {card.earnOnly && <p className="muted">Carte Apple Wallet : ajout de points. Pour utiliser une récompense, demande le QR temporaire dans Fidelity.</p>}
           <button className="text-button" type="button" disabled={busy} onClick={() => { setCard(null); setError('') }}>Scanner un autre client</button>
         </>}
       </section> : <>
         <label className="scan-place">Établissement<select value={place} disabled={busy} onChange={event => { setPlace(event.target.value); setCameraVersion(v => v + 1) }}>{places.map(item => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label>
         {!busy && <QrCamera key={cameraVersion} onCode={value => void scan(value)} />}
         {busy && <p role="status">Lecture de la carte…</p>}
+        <QrImageInput onCode={value => void scan(value)} disabled={busy} />
         <form className="scan-manual" onSubmit={event => { event.preventDefault(); void scan(manual) }}><label htmlFor="scan-code">Code de secours du client</label><input id="scan-code" value={manual} placeholder="Coller le code Fidelity" autoComplete="off" spellCheck={false} onChange={event => setManual(event.target.value)} /><button className="outline-button full" disabled={busy || !manual.trim()} type="submit">Lire la carte</button></form>
       </>}
     {error && <p className="card-action-error" role="alert">{error}</p>}

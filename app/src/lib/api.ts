@@ -1,5 +1,5 @@
 import { cacheMembers, restaurants as demoRestaurants } from '../data'
-import type { HistoryItem, Loyalty, Member, ProgramClient, Restaurant, ScanEvent } from '../data'
+import type { HistoryItem, Loyalty, Member, Offer, ProgramClient, Restaurant, ScanEvent } from '../data'
 import type { Share } from '../nav'
 import type { SearchProfile } from './search-profile'
 import { WEEK_DAYS } from './search-catalog'
@@ -251,6 +251,8 @@ interface ApiProgram {
 }
 
 interface ApiRestaurant {
+  imageUrl?: string
+  offers?: Offer[]
   id: string
   slug: string
   name: string
@@ -311,6 +313,8 @@ function mergeRestaurant(demo: Restaurant | undefined, api: ApiRestaurant): Rest
     district: api.district,
     address: api.address,
     description: api.description || base.description,
+    image: api.imageUrl || base.image,
+    offers: api.offers ?? base.offers,
     diets: api.diets ?? base.diets,
     foodTags: api.foodTags ?? base.foodTags,
     services: api.services ?? base.services,
@@ -437,6 +441,43 @@ export async function presentMyCard(frontId: string): Promise<{ code: string; ex
   return apiCall('POST', `/memberships/${card.id}/presentation`, { role: 'member' })
 }
 
+export async function fetchWalletStatus(): Promise<boolean> {
+  try { return (await apiCall<{ enabled: boolean }>('GET', '/wallet/status')).enabled === true }
+  catch { return false }
+}
+export async function requestWalletDownload(frontId: string): Promise<string> {
+  await ensureSession('member')
+  const card = backendState.memberships[frontId]
+  if (!card) throw new Error('Connecte-toi et ajoute cette carte à ton compte avant de l’exporter.')
+  const { url } = await apiCall<{ url: string }>('POST', `/memberships/${card.id}/wallet`, { role: 'member' })
+  const target = new URL(url)
+  if (target.protocol !== 'https:' || target.username || target.password || target.pathname !== '/wallet/download') throw new Error('Le lien Wallet est indisponible. Réessaie plus tard.')
+  return target.href
+}
+export function restaurantLink(frontId: string): string {
+  const url = new URL(window.location.origin)
+  url.searchParams.set('restaurant', ID_TO_SLUG[frontId] || frontId)
+  return url.href
+}
+export const frontRestaurantId = (slug: string) => SLUG_TO_ID[slug] || slug
+
+export async function fetchPublicShares(): Promise<Share[]> {
+  const posts = await apiCall<ApiShare[]>('GET', '/shares/public')
+  return posts.filter(post => post.restaurant).map(post => mapShare(post, frontRestaurantId(post.restaurant!.slug)))
+}
+export async function fetchSocialState(): Promise<{ likedPostIds: string[]; followedMemberIds: string[] }> {
+  await ensureSession('member')
+  return apiCall('GET', '/social/mine', { role: 'member' })
+}
+export async function setPostLike(postId: string, active: boolean): Promise<{ active: boolean; count: number }> {
+  await ensureSession('member')
+  return apiCall('PUT', `/social/posts/${encodeURIComponent(postId)}/like`, { role: 'member', body: { active } })
+}
+export async function setMemberFollow(memberId: string, active: boolean): Promise<{ active: boolean; count: number }> {
+  await ensureSession('member')
+  return apiCall('PUT', `/social/members/${encodeURIComponent(memberId)}/follow`, { role: 'member', body: { active } })
+}
+
 export interface OwnedRestaurant { id: string; frontId: string; name: string; status: string }
 export async function fetchOwnedRestaurants(): Promise<OwnedRestaurant[]> {
   await ensureSession('restaurant')
@@ -449,11 +490,13 @@ export async function fetchOwnedRestaurants(): Promise<OwnedRestaurant[]> {
   return list.map(restaurant => ({ id: restaurant.id, frontId: SLUG_TO_ID[restaurant.slug] ?? restaurant.slug, name: restaurant.name, status: restaurant.status }))
 }
 export interface ScannedCard {
+  code?: string; earnOnly?: boolean
   membershipId: string; member: { displayName: string | null; pseudo: string | null }
   restaurant: { id: string; name: string }; program: ApiProgram; balance: number; expiresAt: string
 }
 export async function resolveScannedCard(code: string, restaurantId: string): Promise<ScannedCard> {
   await ensureSession('restaurant')
+  if (code.startsWith('fw1_')) return apiCall('POST', '/wallet/scan', { role: 'restaurant', body: { code, restaurantId } })
   return apiCall('GET', `/scan/${encodeURIComponent(code)}?restaurantId=${encodeURIComponent(restaurantId)}`, { role: 'restaurant' })
 }
 export interface ScanReceipt { id: string; delta: number; balanceAfter: number; createdAt: string; idempotentReplay?: boolean }
@@ -570,8 +613,9 @@ export async function fetchClients(frontId: string): Promise<{ clients: ProgramC
 /** Publie la façade (profil + menu) d'un restaurant sur le serveur. */
 export async function publishProfile(
   frontId: string,
-  profile: { name: string; cuisine: string; district: string; address: string; description: string } & SearchProfile,
+  profile: { name: string; cuisine: string; district: string; address: string; description: string; image?: string } & SearchProfile,
   menu: Array<{ name: string; description: string; price: string }>,
+  offers?: Offer[],
 ): Promise<boolean | 'unsupported'> {
   const backendId = backendState.backendIds[frontId]
   if (!backendId) return false
@@ -585,6 +629,8 @@ export async function publishProfile(
         district: profile.district,
         address: profile.address,
         description: profile.description,
+        ...(profile.image ? { imageUrl: profile.image } : {}),
+        ...(offers ? { offers } : {}),
         diets: profile.diets,
         foodTags: profile.foodTags,
         services: profile.services,
@@ -673,6 +719,7 @@ const ID_TO_SLUG: Record<string, string> = Object.fromEntries(
 )
 
 interface ApiShare {
+  _count?: { likes: number }
   id: string
   imageUrl: string
   caption: string
@@ -703,6 +750,7 @@ function mapShare(post: ApiShare, restaurantId: string): Share {
   return {
     id: numericId(post.id),
     backendId: post.id,
+    likes: post._count?.likes ?? 0,
     restaurantId,
     memberId: post.author?.id,
     author,

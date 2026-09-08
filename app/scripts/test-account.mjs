@@ -109,3 +109,31 @@ test('Scan après coupure réseau : la même référence est réémise et le sol
   const writes = calls.filter(call => call.url.endsWith('/ledger/earn'))
   assert.equal(writes.length, 2); assert.equal(writes[0].options.body, writes[1].options.body)
 })
+test('Wallet indisponible : repli propre sans export ni connexion automatique', async t => {
+  const { api, calls } = await fixture(t, async () => { throw new Error('Hors ligne') })
+  assert.equal(await api.fetchWalletStatus(), false)
+  assert.equal(calls.length, 1)
+  assert.ok(calls[0].url.endsWith('/wallet/status'))
+})
+test('Export Wallet : carte détenue, Bearer membre et URL HTTPS limitée au téléchargement', async t => {
+  let bad = false
+  const { api, calls, values } = await fixture(t, async url => url.endsWith('/auth/me') ? [account.user] : [{ url: bad ? 'javascript:alert(1)' : 'https://fidelity.example/wallet/download?token=limited-download-token' }])
+  values.set('fidelity.account', JSON.stringify(account))
+  await assert.rejects(api.requestWalletDownload('amina'), /ajoute cette carte/)
+  api.getBackendState().memberships.amina = { id: 'my-card', balance: 7, restaurant: { slug: 'chez-amina' } }
+  assert.match(await api.requestWalletDownload('amina'), /^https:/)
+  const write = calls.find(call => call.url.endsWith('/memberships/my-card/wallet'))
+  assert.equal(write.options.method, 'POST'); assert.equal(write.options.headers.Authorization, 'Bearer ' + account.token)
+  assert.equal(api.getBackendState().memberships.amina.balance, 7)
+  bad = true
+  await assert.rejects(api.requestWalletDownload('amina'), /indisponible/)
+})
+test('Scan Wallet : échange du QR permanent contre la présentation temporaire serveur', async t => {
+  const { api, calls, values } = await fixture(t, async url => url.endsWith('/auth/me') ? [account.user] : [{ code: 'fc1_' + 'x'.repeat(32), earnOnly: true }])
+  values.set('fidelity.account', JSON.stringify(account))
+  const code = 'fw1_' + 'a'.repeat(32), result = await api.resolveScannedCard(code, 'restaurant-test')
+  assert.equal(result.earnOnly, true); assert.match(result.code, /^fc1_/)
+  const write = calls.find(call => call.url.endsWith('/wallet/scan'))
+  assert.equal(write.options.method, 'POST')
+  assert.deepEqual(JSON.parse(write.options.body), { code, restaurantId: 'restaurant-test' })
+})

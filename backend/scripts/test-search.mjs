@@ -59,10 +59,11 @@ async function restaurantApi(t, owner = 'owner') {
   const app = Fastify()
   const writes = []
   app.decorate('authenticate', async (req) => { req.userId = 'owner'; req.userRole = 'RESTAURANT' })
-  restaurantRoutes(app, { restaurant: {
+  const db = { $executeRaw: async () => 0, $transaction: async callback => callback(db), restaurant: {
     findUnique: async () => ({ id: 'resto', ownerId: owner }),
     update: async (args) => { writes.push(args); return { id: 'resto', ...args.data } },
-  } })
+  } }
+  restaurantRoutes(app, db)
   registerErrorHandler(app)
   t.after(() => app.close())
   return { app, writes }

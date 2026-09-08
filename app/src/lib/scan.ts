@@ -1,12 +1,12 @@
 export const isCardCode = (code: string) => /^fc1_[A-Za-z0-9_-]{32}$/.test(code)
 export function parseCardCode(value: string): string {
-  const code = value.trim().replace(/^fidelity:card:/, '')
-  if (!isCardCode(code)) throw new Error('Ce QR ne correspond pas à une carte Fidelity. Demande au client d’ouvrir sa carte.')
+  const code = value.trim().replace(/^fidelity:(card|wallet):/, '')
+  if (!isCardCode(code) && !/^fw1_[A-Za-z0-9_-]{32}$/.test(code)) throw new Error('Ce QR ne correspond pas à une carte Fidelity. Demande au client d’ouvrir sa carte.')
   return code
 }
 export interface PendingScan {
   accountId: string; operation: 'earn' | 'redeem'; restaurantId: string; code: string
-  idempotencyKey: string; delta?: number; clientName: string; createdAt: number
+  idempotencyKey: string; delta?: number; clientName: string; createdAt: number; unit?: 'STAMPS' | 'POINTS'
 }
 const key = 'fidelity.scan.pending.v1'
 export function readPendingScan(accountId: string): PendingScan | null {

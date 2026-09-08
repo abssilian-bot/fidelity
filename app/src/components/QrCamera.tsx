@@ -8,20 +8,21 @@ export function QrCamera({ onCode }: { onCode: (value: string) => void }) {
   const [error, setError] = useState('')
   const [attempt, setAttempt] = useState(0)
   useEffect(() => {
-    let cancelled = false, stream: MediaStream | undefined, frame = 0, last = 0
+    let cancelled = false, paused = document.hidden, stream: MediaStream | undefined, frame = 0, last = 0
     const stop = () => { cancelAnimationFrame(frame); stream?.getTracks().forEach(track => track.stop()) }
     const start = async () => {
       try {
         if (!navigator.mediaDevices?.getUserMedia) throw new Error('La caméra nécessite une connexion HTTPS. Tu peux aussi coller le code du client ci-dessous.')
         const { default: jsQR } = await import('jsqr')
         stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }, audio: false })
-        if (cancelled || !video.current) { stop(); return }
+        if (cancelled || paused || !video.current) { stop(); return }
         video.current.srcObject = stream
         await video.current.play()
+        if (cancelled || paused) { stop(); return }
         const canvas = document.createElement('canvas')
         const context = canvas.getContext('2d', { willReadFrequently: true })
         const scan = (time: number) => {
-          if (cancelled) return
+          if (cancelled || paused) return
           if (video.current && context && video.current.readyState >= 2 && time - last > 180) {
             last = time
             const width = Math.min(video.current.videoWidth, 800)
@@ -42,7 +43,7 @@ export function QrCamera({ onCode }: { onCode: (value: string) => void }) {
       }
     }
     setError(''); void start()
-    const pause = () => { if (document.hidden) { stop(); setError('Caméra en pause. Reprends le scan pour continuer.') } }
+    const pause = () => { if (document.hidden) { paused = true; stop(); setError('Caméra en pause. Reprends le scan pour continuer.') } }
     document.addEventListener('visibilitychange', pause)
     return () => { cancelled = true; stop(); document.removeEventListener('visibilitychange', pause) }
   }, [attempt])

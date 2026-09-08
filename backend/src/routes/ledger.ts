@@ -21,6 +21,7 @@ export function ledgerRoutes(app: FastifyInstance, prisma: PrismaClient) {
       } },
     } })
     if (!presentation) throw new LedgerError(404, 'QR inconnu. Demande au client d’ouvrir sa carte Fidelity.')
+    if (presentation.operatorId && presentation.operatorId !== req.userId) throw new LedgerError(403, 'Ce scan appartient à un autre opérateur.')
     const { membership } = presentation
     if (membership.restaurant.ownerId !== req.userId && req.userRole !== 'ADMIN') throw new LedgerError(403, 'Cette carte n’appartient pas à ton restaurant.')
     if (restaurantId && membership.restaurantId !== restaurantId) throw new LedgerError(409, 'Cette carte concerne un autre établissement. Sélectionne le bon restaurant.')
@@ -39,6 +40,7 @@ export function ledgerRoutes(app: FastifyInstance, prisma: PrismaClient) {
         membershipId: membership.id, member: membership.user,
         restaurant: { id: membership.restaurantId, name: membership.restaurant.name },
         program: membership.restaurant.program, balance: await balanceOf(prisma, membership.id), expiresAt: presentation.expiresAt,
+        code: presentation.id, earnOnly: presentation.source === 'wallet',
       }
     } catch (error) { return handleLedgerError(reply, error) }
   })
@@ -50,6 +52,7 @@ export function ledgerRoutes(app: FastifyInstance, prisma: PrismaClient) {
           await tx.$queryRaw`SELECT "id" FROM "Restaurant" WHERE "id" = ${body.restaurantId} FOR SHARE`
           await tx.$queryRaw`SELECT "id" FROM "LoyaltyProgram" WHERE "restaurantId" = ${body.restaurantId} FOR SHARE`
           const presentation = await resolve(tx, req, body.code, body.restaurantId)
+          if (presentation.source === 'wallet' && operation !== 'earn') throw new LedgerError(403, 'Pour utiliser une récompense ou corriger le solde, demande au client le QR temporaire de l’application.')
           const program = presentation.membership.restaurant.program!
           const delta = operation === 'redeem' ? -program.target : ('delta' in body && typeof body.delta === 'number' ? body.delta : 0)
           const limit = program.type === 'STAMPS' ? 10 : 1000

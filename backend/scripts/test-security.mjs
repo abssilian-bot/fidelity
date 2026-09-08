@@ -220,16 +220,55 @@ test('Un corps trop gros est rejeté et une origine tierce n’est pas autorisé
 })
 
 test('Tables protégées par RLS ; un rôle SQL public ne lit ni ne modifie le registre', async () => {
-  const tables = await prisma.$queryRaw`SELECT relname, relrowsecurity FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relname IN ('User', 'Membership', 'LedgerEntry', 'CardPresentation', 'RevokedSession')`
-  assert.equal(tables.length, 5); assert.ok(tables.every(table => table.relrowsecurity))
+  const tables = await prisma.$queryRaw`SELECT relname, relrowsecurity FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relname IN ('User', 'Membership', 'LedgerEntry', 'CardPresentation', 'RevokedSession', 'WalletPass', 'WalletRegistration')`
+  assert.equal(tables.length, 7); assert.ok(tables.every(table => table.relrowsecurity))
   const role = 'audit_reader_' + Date.now()
   await prisma.$executeRawUnsafe(`CREATE ROLE "${role}" NOLOGIN`)
   try {
-    for (const query of ['SELECT * FROM "User" LIMIT 1', 'UPDATE "LedgerEntry" SET "delta" = 100 WHERE false']) {
+    for (const query of ['SELECT * FROM "User" LIMIT 1', 'SELECT * FROM "WalletPass" LIMIT 1', 'SELECT * FROM "WalletRegistration" LIMIT 1', 'UPDATE "LedgerEntry" SET "delta" = 100 WHERE false']) {
       await assert.rejects(prisma.$transaction(async tx => {
         await tx.$executeRawUnsafe(`SET LOCAL ROLE "${role}"`)
         await tx.$executeRawUnsafe(query)
       }), error => error.code === 'P2010' && error.meta?.code === '42501')
     }
   } finally { await prisma.$executeRawUnsafe(`DROP ROLE "${role}"`) }
+})
+
+test('Offres : sauvegarde, relecture et validation réservées au propriétaire', async () => {
+  const offers = [{ id: 1, kind: 'happyhour', title: 'Goûter', detail: 'Dessert et café', schedule: '15 h – 17 h' }]
+  assert.equal((await request('PUT', `/restaurants/${restaurant.id}`, otherOwner, { offers })).status, 403)
+  assert.equal((await request('PUT', `/restaurants/${restaurant.id}`, owner, { offers: [{ ...offers[0], kind: 'forgé' }] })).status, 400)
+  const result = await request('PUT', `/restaurants/${restaurant.id}`, owner, { offers })
+  assert.equal(result.status, 200)
+  assert.deepEqual((await request('GET', `/restaurants/${restaurant.slug}`)).data.offers, offers)
+})
+
+test('Likes : session obligatoire, état idempotent et aucune interaction sur un post privé', async () => {
+  const post = await prisma.post.create({ data: { authorId: otherMember.id, taggedRestaurantId: restaurant.id, status: 'PUBLISHED', imageUrl: '/images/table.webp' } })
+  const path = `/social/posts/${post.id}/like`
+  assert.equal((await request('PUT', path, null, { active: true })).status, 401)
+  assert.equal((await request('PUT', path, member, { active: 'oui' })).status, 400)
+  for (let i = 0; i < 2; i++) assert.deepEqual((await request('PUT', path, member, { active: true })).data, { active: true, count: 1 })
+  assert.ok((await request('GET', '/social/mine', member)).data.likedPostIds.includes(post.id))
+  assert.deepEqual((await request('PUT', path, otherMember, { active: false })).data, { active: false, count: 1 })
+  assert.deepEqual((await request('PUT', path, member, { active: false })).data, { active: false, count: 0 })
+  await prisma.post.update({ where: { id: post.id }, data: { status: 'PENDING' } })
+  assert.equal((await request('PUT', path, member, { active: true })).status, 404)
+  await prisma.post.update({ where: { id: post.id }, data: { status: 'PUBLISHED' } })
+})
+
+test('Abonnements : compte public, pas d’auto-abonnement, compteur serveur exact', async () => {
+  const path = `/social/members/${otherMember.id}/follow`
+  assert.equal((await request('PUT', path, null, { active: true })).status, 401)
+  assert.equal((await request('PUT', `/social/members/${member.id}/follow`, member, { active: true })).status, 400)
+  for (let i = 0; i < 2; i++) assert.deepEqual((await request('PUT', path, member, { active: true })).data, { active: true, count: 1 })
+  assert.equal((await request('GET', `/members/${otherMember.id}`)).data._count.followers, 1)
+  assert.ok((await request('GET', '/social/mine', member)).data.followedMemberIds.includes(otherMember.id))
+  assert.deepEqual((await request('PUT', path, member, { active: false })).data, { active: false, count: 0 })
+})
+
+test('Fil Discovery public : uniquement les publications validées et aucune adresse e-mail', async () => {
+  const result = await request('GET', '/shares/public')
+  assert.equal(result.status, 200)
+  assert.ok(result.data.every(post => post.status === 'PUBLISHED' && post.restaurant?.slug && !post.author?.email))
 })

@@ -93,6 +93,7 @@ export interface Restaurant {
 }
 
 export interface FeedPost {
+  backendId?: string
   id: number
   restaurantId: string
   authorType: 'member' | 'restaurant'
@@ -769,6 +770,8 @@ export const setRecentScans = (scans: ScanEvent[]) => {
 }
 
 export interface SharedPost {
+  backendId?: string
+  likes?: number
   id: number
   restaurantId: string
   memberId?: string

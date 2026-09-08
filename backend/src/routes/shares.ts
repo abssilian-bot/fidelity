@@ -32,10 +32,17 @@ const decideSchema = z.object({
 const postSelect = {
   id: true, imageUrl: true, caption: true, rating: true, status: true, createdAt: true,
   author: { select: { id: true, displayName: true, pseudo: true, avatarUrl: true } },
+  _count: { select: { likes: true } },
 } as const
 
 export function shareRoutes(app: FastifyInstance, prisma: PrismaClient) {
   const shareRateLimit = rateLimit(30, 60_000)
+  app.get('/shares/public', async () => {
+    const places = await prisma.restaurant.findMany({ where: { status: 'VERIFIED' }, select: { id: true, slug: true, name: true } })
+    const byId = new Map(places.map(place => [place.id, place]))
+    const posts = await prisma.post.findMany({ where: { status: 'PUBLISHED', taggedRestaurantId: { in: places.map(place => place.id) } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 50, select: { ...postSelect, taggedRestaurantId: true } })
+    return posts.map(post => ({ ...post, restaurant: byId.get(post.taggedRestaurantId!) }))
+  })
 
   // Le membre publie un FoodShare — exige une première commande (≥ 1 EARN)
   app.post('/shares', { preHandler: [app.authenticate, shareRateLimit] }, async (req, reply) => {

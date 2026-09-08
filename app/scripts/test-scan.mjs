@@ -8,6 +8,14 @@ test('Lecture QR : format Fidelity et code de secours, aucune navigation arbitra
   assert.equal(parseCardCode(' ' + code + ' '), code)
   for (const value of ['https://evil.example/?token=x', 'javascript:alert(1)', '<script>x</script>', 'fc1_tropcourt', code + '.suffixe']) assert.throws(() => parseCardCode(value), /Fidelity/)
 })
+test('Carte Wallet : QR permanent reconnu, seule la présentation temporaire peut être reprise', t => {
+  const walletCode = code.replace('fc1_', 'fw1_')
+  assert.equal(parseCardCode('fidelity:wallet:' + walletCode), walletCode)
+  const previous = globalThis.sessionStorage
+  globalThis.sessionStorage = { getItem: () => JSON.stringify({ accountId: 'owner', operation: 'earn', code: walletCode, idempotencyKey: 'reference', restaurantId: 'r' }) }
+  t.after(() => { globalThis.sessionStorage = previous })
+  assert.equal(readPendingScan('owner'), null)
+})
 test('Reprise après rechargement : montant, carte et référence conservés ensemble', t => {
   const previous = globalThis.sessionStorage, values = new Map()
   globalThis.sessionStorage = { getItem: key => values.get(key), setItem: (key, value) => values.set(key, value), removeItem: key => values.delete(key) }

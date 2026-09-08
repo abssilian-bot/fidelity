@@ -22,6 +22,7 @@ import { readSearchProfiles, saveSearchProfiles, searchProfileOf, searchProfileS
 import { WEEK_DAYS } from './lib/search-catalog'
 import { readMyCards, saveMyCards, usedCardIds } from './lib/my-cards'
 import { ScanPage } from './pages/Scan'
+import { frontRestaurantId } from './lib/api'
 
 const MAIN_PAGES = new Set<RouteName>([
   'home',
@@ -59,14 +60,15 @@ const makeDraft = (restaurant: Restaurant): RestoDraft => ({
 // hors de l'effet pour les deux montages de développement de React StrictMode.
 const startupUrl = new URL(window.location.href)
 const startupLoginToken = startupUrl.searchParams.get('token')
+const startupRestaurant = startupUrl.searchParams.get('restaurant')
 if (startupUrl.searchParams.has('token')) {
   startupUrl.searchParams.delete('token')
   window.history.replaceState(window.history.state, '', `${startupUrl.pathname}${startupUrl.search}${startupUrl.hash}`)
 }
 
 function App() {
-  const [role, setRole] = useState<AppRole | null>(() => getAccount() ? 'member' : null)
-  const [route, setRoute] = useState<Route>({ name: 'home' })
+  const [role, setRole] = useState<AppRole | null>(() => getAccount() || startupRestaurant ? 'member' : null)
+  const [route, setRoute] = useState<Route>(startupRestaurant && /^[a-z0-9-]{1,120}$/.test(startupRestaurant) ? { name: 'restaurant', restaurantId: frontRestaurantId(startupRestaurant) } : { name: 'home' })
   const [, setRouteStack] = useState<Route[]>([])
   const [favorites, setFavorites] = useState<Set<string>>(new Set(['amina', 'comptoir', 'miso']))
   const [toast, setToast] = useState('')
@@ -98,6 +100,9 @@ function App() {
       const state = await bootstrapBackend(demoRestaurants)
       if (cancelled) return
       setBackend(state)
+      if (startupRestaurant && !(state.connected ? state.restaurants[frontRestaurantId(startupRestaurant)] : demoRestaurants.some(item => item.id === frontRestaurantId(startupRestaurant)))) {
+        setRoute({ name: 'home' }); setToast('Ce restaurant est indisponible. Retrouve les autres tables dans la recherche.')
+      }
       if (loginFailed) {
         setRole('member'); setRoute({ name: 'settings' })
         setToast('Lien invalide ou expiré — redemande un lien de connexion.')
@@ -263,7 +268,7 @@ function App() {
     setActiveRestoId(id)
     setRouteStack([])
     setRoute({ name: 'restoDashboard' })
-    setToast(kind === 'franchise' ? 'Franchise créée — programme et menu copiés' : 'Nouveau restaurant créé — complétez sa façade')
+    setToast(kind === 'franchise' ? 'Brouillon local créé — programme et menu copiés' : 'Brouillon local créé — complétez la façade pour préparer votre établissement')
     window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior })
   }
 
@@ -352,7 +357,7 @@ function App() {
       const remaining = myRestaurants.filter((place) => place !== id && !archivedPlaces.has(place))
       setActiveRestoId(remaining[0] || 'amina')
     }
-    setToast('Restaurant archivé — il reste visible dans « Archivés » ci-dessous')
+    setToast('Restaurant masqué dans cet aperçu local')
   }
 
   const restoreRestaurant = (id: string) => {
@@ -361,7 +366,7 @@ function App() {
       next.delete(id)
       return next
     })
-    setToast('Restaurant restauré')
+    setToast('Restaurant réaffiché dans cet aperçu')
   }
 
   const deleteRestaurantForever = (id: string) => {
@@ -371,7 +376,7 @@ function App() {
       next.delete(id)
       return next
     })
-    setToast('Restaurant supprimé définitivement')
+    setToast('Restaurant retiré de la liste locale. Les données du serveur sont conservées.')
   }
 
   useEffect(() => {

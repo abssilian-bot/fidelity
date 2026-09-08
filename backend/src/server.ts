@@ -13,11 +13,14 @@ import { membershipRoutes } from './routes/memberships.js'
 import { ledgerRoutes } from './routes/ledger.js'
 import { shareRoutes } from './routes/shares.js'
 import { memberSearchRoutes } from './routes/member-search.js'
+import { walletRoutes } from './routes/wallet.js'
+import { socialRoutes } from './routes/social.js'
+import { startWalletUpdates } from './lib/wallet-push.js'
 
 const prisma = new PrismaClient()
-const app = Fastify({ logger: {
+const app = Fastify({ routerOptions: { maxParamLength: 200 }, logger: {
   // Le logger HTTP ne doit pas exposer le token de /auth/verify ni les en-têtes de session.
-  serializers: { req: (req) => ({ method: req.method, url: req.url?.split('?')[0].replace(/^\/scan\/[^/]+/, '/scan/[masqué]'), remoteAddress: req.ip }) },
+  serializers: { req: (req) => ({ method: req.method, url: req.url?.split('?')[0].replace(/^\/scan\/[^/]+/, '/scan/[masqué]').replace(/^\/wallet\/(download|v1\/devices|v1\/passes)\/.*/, '/wallet/$1/[masqué]'), remoteAddress: req.ip }) },
   redact: ['req.headers.authorization', 'req.headers.cookie', 'token', 'devLink'],
 }, bodyLimit: 64 * 1024, requestTimeout: 15_000,
 // N'accorder confiance qu'aux adresses de reverse proxies explicitement configurées.
@@ -50,6 +53,10 @@ membershipRoutes(app, prisma)
 ledgerRoutes(app, prisma)
 shareRoutes(app, prisma)
 memberSearchRoutes(app, prisma)
+walletRoutes(app, prisma)
+socialRoutes(app, prisma)
+const stopWalletUpdates = startWalletUpdates(prisma, () => app.log.warn('Mise à jour Wallet différée ; une nouvelle tentative est programmée.'))
+app.addHook('onClose', async () => { stopWalletUpdates(); await prisma.$disconnect() })
 
 // Front statique : sert l'app React compilée quand elle existe.
 // Deux emplacements possibles, le premier trouvé gagne :

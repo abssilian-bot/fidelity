@@ -5,7 +5,7 @@ import type { Member, UserReview, Visit } from '../data'
 import type { CommonProps } from '../nav'
 import { Tabs } from '../components/kit'
 import { ProfileStats } from '../components/ProfileStats'
-import { fetchPublicMember } from '../lib/api'
+import { fetchPublicMember, fetchSocialState, getAccount, setMemberFollow } from '../lib/api'
 
 interface MemberData {
   name: string
@@ -171,17 +171,20 @@ export function MyReviewsPage({ go, favorites, resolveRestaurant, memberId, myRe
 }
 
 /** Profil public d'un membre — même présentation que notre propre profil. */
-export function MemberProfilePage({ go, memberId }: CommonProps & { memberId?: string }) {
+export function MemberProfilePage({ go, memberId, notify }: CommonProps & { memberId?: string }) {
   const cachedMember = memberId ? getMember(memberId) : undefined
   const needsRemote = !!memberId && (!cachedMember || cachedMember.source === 'server')
   const [remote, setRemote] = useState<Member | null>(null)
   const [failed, setFailed] = useState(false)
   const [attempt, setAttempt] = useState(0)
   const [following, setFollowing] = useState(false)
+  const [followCount, setFollowCount] = useState<number | null>(null)
+  const [followBusy, setFollowBusy] = useState(false)
   const [activeTab, setActiveTab] = useState('Publications')
   useEffect(() => {
     if (!needsRemote || !memberId) return
     const controller = new AbortController()
+    void fetchSocialState().then(state => { if (!controller.signal.aborted) setFollowing(state.followedMemberIds.includes(memberId)) }).catch(() => {})
     fetchPublicMember(memberId, controller.signal).then((member) => {
       if (controller.signal.aborted) return
       if (member) setRemote(member)
@@ -221,10 +224,18 @@ export function MemberProfilePage({ go, memberId }: CommonProps & { memberId?: s
         </div>
         <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.55 }}>{member.bio}</p>
 
-        {member.source !== 'server' && <button
+        {member.id !== getAccount()?.user.id && <button
           className={following ? 'outline-button full' : 'primary-button full'}
           type="button"
-          onClick={() => setFollowing(!following)}
+          disabled={followBusy}
+          onClick={async () => {
+            if (member.source !== 'server') { setFollowing(!following); return }
+            if (followBusy) return
+            setFollowBusy(true)
+            try { const result = await setMemberFollow(member.id, !following); setFollowing(result.active); setFollowCount(result.count) }
+            catch (cause) { notify(cause instanceof Error ? cause.message : 'Abonnement indisponible.') }
+            finally { setFollowBusy(false) }
+          }}
         >
           <UserPlus size={18} /> {following ? `Vous suivez ${member.name.split(' ')[0]}` : `Suivre ${member.name.split(' ')[0]}`}
         </button>}
@@ -234,7 +245,7 @@ export function MemberProfilePage({ go, memberId }: CommonProps & { memberId?: s
           : <>
             <ProfileStats stats={[
               { label: 'publications', value: member.posts },
-              { label: 'abonnés', value: member.followers + (following ? 1 : 0) },
+              { label: 'abonnés', value: member.source === 'server' ? followCount ?? member.followers : member.followers + (following ? 1 : 0) },
               { label: 'abonnements', value: member.following },
               ...(member.source !== 'server' ? [
                 { label: 'restaurants', value: member.liked, onClick: () => go('likedRestaurants', { memberId: member.id }) },

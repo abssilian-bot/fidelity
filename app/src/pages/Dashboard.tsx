@@ -238,8 +238,8 @@ export function RestoFoodsharePage({ restaurant, notify, sharedPosts = [], decid
             <Share2 size={18} />
           </span>
           <span>
-            <strong style={{ fontSize: 14.5 }}>Activer FoodShare</strong>
-            <small>{enabled ? 'Les partages peuvent rapporter des coches.' : 'FoodShare est en pause.'}</small>
+            <strong style={{ fontSize: 14.5 }}>Afficher les partages à valider</strong>
+            <small>{enabled ? 'La file de validation est visible.' : 'La file est masquée sur cet écran.'}</small>
           </span>
           <span className={`radio-dot ${enabled ? 'on' : ''}`} />
         </button>
@@ -314,7 +314,7 @@ export function RestoFoodsharePage({ restaurant, notify, sharedPosts = [], decid
         )}
         {!enabled && (
           <p className="muted" style={{ fontSize: 13.5, margin: 0 }}>
-            FoodShare est en pause : les nouveaux partages ne rapportent rien pour le moment.
+            La file est masquée. Les nouveaux partages restent en attente sur le serveur jusqu’à ta décision.
           </p>
         )}
       </section>
@@ -361,7 +361,7 @@ export function RestoPlacesPage({ go, restaurant, restaurants, archivedRestauran
           <span className="eyebrow">Espace restaurateur</span>
           <h1 style={{ margin: '6px 0 4px' }}>Mes établissements</h1>
           <p className="muted" style={{ margin: 0, fontSize: 14 }}>
-            Basculez d’un restaurant à l’autre, ou ouvrez-en un nouveau.
+            Basculez entre vos établissements. Les nouveaux brouillons ci-dessous restent sur cet appareil.
           </p>
         </div>
       </div>
@@ -393,7 +393,7 @@ export function RestoPlacesPage({ go, restaurant, restaurants, archivedRestauran
               </button>
               <button
                 type="button"
-                aria-label={`Archiver ${place.name}`}
+                aria-label={`Masquer ${place.name} dans cet aperçu`}
                 onClick={() => onArchive?.(place.id)}
                 disabled={restaurants.length <= 1}
               >
@@ -406,9 +406,9 @@ export function RestoPlacesPage({ go, restaurant, restaurants, archivedRestauran
 
       {archivedRestaurants.length > 0 && (
         <section className="dashboard-section">
-          <h2 style={{ margin: 0 }}>Archivés</h2>
+          <h2 style={{ margin: 0 }}>Masqués dans cet aperçu</h2>
           <p className="muted" style={{ margin: 0, fontSize: 13 }}>
-            Invisibles pour vos clients, mais rien n’est perdu. La suppression définitive est irréversible.
+            Ce rangement est local : les établissements existants restent visibles sur le site public.
           </p>
           <div className="dashboard-list">
             {archivedRestaurants.map((place) => (
@@ -430,14 +430,15 @@ export function RestoPlacesPage({ go, restaurant, restaurants, archivedRestauran
       )}
 
       <section className="dashboard-section">
-        <h2 style={{ margin: 0 }}>Ajouter un restaurant</h2>
+        <h2 style={{ margin: 0 }}>Préparer un établissement</h2>
+        <p className="muted">Brouillons de démonstration. Un établissement réel doit être validé et rattaché à votre compte avant de pouvoir publier ou scanner.</p>
         <div className="role-options" style={{ margin: 0 }}>
           <button className="role-card" type="button" onClick={() => onAdd('franchise')}>
             <span className="role-icon">
               <CopyPlus size={21} strokeWidth={1.7} />
             </span>
             <span className="role-copy">
-              <strong>Ouvrir une franchise</strong>
+              <strong>Préparer un brouillon de franchise</strong>
               <small>Même concept que {restaurant.name} : le programme et le menu sont copiés, vous n’avez plus qu’à ajuster.</small>
             </span>
             <ChevronRight size={18} color="var(--muted-soft)" />
@@ -447,7 +448,7 @@ export function RestoPlacesPage({ go, restaurant, restaurants, archivedRestauran
               <Building2 size={21} strokeWidth={1.7} />
             </span>
             <span className="role-copy">
-              <strong>Créer un autre restaurant</strong>
+              <strong>Créer un brouillon local</strong>
               <small>Un établissement indépendant, avec sa propre page, son menu et son programme.</small>
             </span>
             <ChevronRight size={18} color="var(--muted-soft)" />

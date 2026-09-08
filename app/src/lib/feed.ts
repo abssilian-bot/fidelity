@@ -13,13 +13,14 @@ export function feedAuthorRoute(post: FeedPost): Route | null {
 export function shareToFeedPost(share: SharedPost): FeedPost {
   return {
     id: share.id + 1_000_000,
+    backendId: share.backendId,
     restaurantId: share.restaurantId,
     authorType: 'member',
     memberId: share.memberId,
     author: share.author,
     verified: false,
     image: share.image,
-    likes: 0,
+    likes: share.likes ?? 0,
     text: share.caption || 'A partagé sa visite via FoodShare.',
     time: share.time,
   }

@@ -1,4 +1,5 @@
 import { Prisma, type PrismaClient } from '@prisma/client'
+import { markWalletChanged } from './wallet-updates.js'
 
 export class LedgerError extends Error {
   constructor(public statusCode: number, message: string) { super(message) }
@@ -40,7 +41,9 @@ export async function writeEntryInTransaction(tx: Prisma.TransactionClient, inpu
   if (balanceAfter < 0) throw new LedgerError(409, 'Solde insuffisant pour cette opération.')
   if (!Number.isSafeInteger(balanceAfter) || balanceAfter > 2_000_000_000) throw new LedgerError(409, 'La limite du programme est atteinte.')
   const { presentationId: _presentationId, ...data } = input
-  return tx.ledgerEntry.create({ data: { ...data, balanceAfter }, select: entrySelect })
+  const entry = await tx.ledgerEntry.create({ data: { ...data, balanceAfter }, select: entrySelect })
+  await markWalletChanged(tx, input.membershipId)
+  return entry
 }
 export async function writeEntry(prisma: PrismaClient, input: EntryInput) {
   return prisma.$transaction(tx => writeEntryInTransaction(tx, input), { maxWait: 5_000, timeout: 10_000 })

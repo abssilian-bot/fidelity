@@ -1,29 +1,29 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Check, LoaderCircle, Plus, Wallet } from 'lucide-react'
 import type { CommonProps } from '../nav'
 import type { Restaurant } from '../data'
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from './ui/dialog'
+import { fetchWalletStatus, requestWalletDownload } from '../lib/api'
 
-/** Point d'entrée Wallet, en attente de l'activation du service Apple après le front. */
 export function AppleWalletButton({ restaurant }: { restaurant: Restaurant }) {
-  return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <button className="wallet-button full" type="button">
-          <Wallet size={23} aria-hidden="true" />
-          <span>Ajouter à Apple Wallet<small>Bientôt disponible</small></span>
-        </button>
-      </DialogTrigger>
-      <DialogContent className="wallet-dialog" showCloseButton={false}>
-        <span className="wallet-dialog-icon"><Wallet size={30} aria-hidden="true" /></span>
-        <DialogTitle>Votre carte dans Apple Wallet</DialogTitle>
-        <DialogDescription>
-          L’ajout à Apple Wallet sera bientôt disponible. Votre carte {restaurant.name} est déjà enregistrée dans « Mes cartes » et reste accessible dans Fidelity.
-        </DialogDescription>
-        <DialogClose asChild><button className="primary-button full" type="button">Compris</button></DialogClose>
-      </DialogContent>
-    </Dialog>
-  )
+  const [available, setAvailable] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  useEffect(() => { let cancelled = false; void fetchWalletStatus().then(value => { if (!cancelled) setAvailable(value) }); return () => { cancelled = true } }, [])
+  async function download() {
+    if (busy) return
+    setBusy(true); setError('')
+    try { window.location.assign(await requestWalletDownload(restaurant.id)) }
+    catch (cause) { setError(cause instanceof Error ? cause.message : 'Impossible d’ouvrir Apple Wallet. Réessaie.') }
+    finally { setBusy(false) }
+  }
+  if (!available) return <p className="card-action-hint">Votre carte et son QR sont disponibles dans Fidelity. L’export Apple Wallet n’est pas activé sur ce serveur.</p>
+  return <>
+    <button className="wallet-button full" type="button" disabled={busy} onClick={() => void download()}>
+      {busy ? <LoaderCircle className="animate-spin" size={23} aria-hidden="true" /> : <Wallet size={23} aria-hidden="true" />}
+      <span>{busy ? 'Préparation de la carte…' : 'Ajouter à Apple Wallet'}<small>Le solde se met à jour après chaque visite</small></span>
+    </button>
+    {error && <p className="card-action-error" role="alert">{error}</p>}
+  </>
 }
 
 export function CardActions({ restaurant, hasCard, addCard, isAddingCard, cardsLoading }: Pick<CommonProps, 'hasCard' | 'addCard' | 'isAddingCard' | 'cardsLoading'> & { restaurant: Restaurant }) {

@@ -76,6 +76,8 @@ model CardPresentation {
   membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
   expiresAt DateTime
   consumedAt DateTime?
+  source String @default("app")
+  operatorId String?
   @@index([expiresAt])
   @@index([membershipId])
 }
@@ -125,6 +127,7 @@ model Restaurant {
   imageUrl    String           @default("")
   menuPdfUrl  String?
   deliverooUrl String?
+  offers      Json             @default("[]")
   createdAt   DateTime         @default(now())
 
   program     LoyaltyProgram?
@@ -171,6 +174,7 @@ model Membership {
 
   entries      LedgerEntry[]
   presentations CardPresentation[]
+  wallet WalletPass?
 
   @@unique([userId, restaurantId])
 }
@@ -272,4 +276,29 @@ model Follow {
   followed   User   @relation("Followed", fields: [followedId], references: [id], onDelete: Cascade)
 
   @@unique([followerId, followedId])
+}
+
+// Secrets distincts pour le QR en caisse et le protocole de mise à jour Apple.
+model WalletPass {
+  id String @id @default(cuid())
+  membershipId String @unique
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  authenticationToken String
+  barcode String @unique
+  version BigInt @default(autoincrement())
+  pushedVersion BigInt @default(0)
+  pushFailures Int @default(0)
+  nextPushAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+  registrations WalletRegistration[]
+  @@index([nextPushAt])
+}
+
+model WalletRegistration {
+  passId String
+  pass WalletPass @relation(fields: [passId], references: [id], onDelete: Cascade)
+  deviceHash String
+  pushToken String
+  @@id([passId, deviceHash])
+  @@index([deviceHash])
 }

@@ -10,12 +10,18 @@ export function FoodshareComposePage({ goBack, restaurant, notify, publishShare 
   const [rating, setRating] = useState(5)
   const [caption, setCaption] = useState('')
   const [photo, setPhoto] = useState(restaurant.image || PHOTO_CHOICES[0])
+  const [publishing, setPublishing] = useState(false)
 
   const publish = async () => {
+    if (publishing || !publishShare) return
+    setPublishing(true)
+    try {
     const ok = await publishShare?.({ restaurantId: restaurant.id, image: photo, caption: caption.trim(), rating })
     if (ok === false) return // refus backend (aucune commande) — le toast explicatif est déjà affiché
     notify('Avis publié ! La photo apparaîtra dans le fil dès que le restaurant l’aura republiée.')
     goBack()
+    } catch { notify('Publication impossible pour le moment. Réessaie.') }
+    finally { setPublishing(false) }
   }
 
   return (
@@ -25,7 +31,7 @@ export function FoodshareComposePage({ goBack, restaurant, notify, publishShare 
           <span className="eyebrow">FoodShare</span>
           <h1 style={{ margin: '6px 0 4px' }}>Partager ma visite</h1>
           <p className="muted" style={{ margin: 0, fontSize: 14 }}>
-            {restaurant.name} · vos points sont déjà crédités, merci !
+            {restaurant.name} · disponible après une visite créditée en caisse.
           </p>
         </div>
       </div>
@@ -53,6 +59,7 @@ export function FoodshareComposePage({ goBack, restaurant, notify, publishShare 
           Votre commentaire
           <textarea
             rows={3}
+            maxLength={300}
             placeholder="Racontez votre visite en une phrase…"
             value={caption}
             onChange={(event) => setCaption(event.target.value)}
@@ -83,8 +90,8 @@ export function FoodshareComposePage({ goBack, restaurant, notify, publishShare 
         </p>
       </section>
 
-      <button className="primary-button full" type="button" style={{ marginTop: 18 }} onClick={publish}>
-        <Share2 size={18} /> Publier mon FoodShare
+      <button className="primary-button full" type="button" style={{ marginTop: 18 }} disabled={publishing || !publishShare} onClick={() => void publish()}>
+        <Share2 size={18} /> {publishing ? 'Publication…' : 'Publier mon FoodShare'}
       </button>
     </main>
   )

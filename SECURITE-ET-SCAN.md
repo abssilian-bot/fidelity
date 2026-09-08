@@ -1,5 +1,7 @@
 # Contrôle de sécurité et caisse Fidelity — 6 septembre 2026
 
+> Complément du 8 septembre : [CARTES-WALLET.md](CARTES-WALLET.md) décrit le QR permanent Wallet réservé aux crédits, la file de mises à jour et le certificat Apple créé. Les offres et les interactions likes/abonnements sont désormais branchées au backend. La suite sécurité compte 30 scénarios et celle de Wallet 17 ; les sections historiques ci-dessous décrivent l'état du 6 septembre.
+
 ## Périmètre et conclusion
 
 Revue de toutes les routes Fastify présentes, de l'authentification, des accès PostgreSQL/Supabase, du registre, des programmes, des adhésions, de FoodShare, de la recherche publique, des URL publiées, des réponses HTTP, des dépendances et du parcours de caisse React. Tests d'attaque sur une **base PostgreSQL locale isolée**, sans envoyer d'e-mails réels ni modifier des soldes de production.

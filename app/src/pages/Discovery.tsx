@@ -1,25 +1,35 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { BadgeCheck, Bookmark, ChevronRight, Clock3, Heart, MessageCircle, Plus, Send, Store, X } from 'lucide-react'
 import { feedPosts, members, stories } from '../data'
-import type { Restaurant } from '../data'
+import type { FeedPost, Restaurant } from '../data'
 import type { CommonProps, SearchFilters } from '../nav'
 import { QuickFilters, SearchBox } from '../components/SearchControls'
 import { SearchFacets } from './Search'
 import { activeFilterCount, defaultSearchFilters, normalizeSearch, searchMembers } from '../lib/search'
 import { useRestaurantSearch } from '../hooks/use-search'
 import { useMemberSearch } from '../hooks/use-member-search'
-import { getBackendState } from '../lib/api'
+import { fetchPublicShares, fetchSocialState, getAccount, getBackendState, restaurantLink, setMemberFollow, setPostLike } from '../lib/api'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../components/ui/dialog'
 import { feedAuthorRoute, shareToFeedPost } from '../lib/feed'
 
-const DISCOVERY_TABS = ['Pour vous', 'Nouveautés', 'Proximité']
+const DISCOVERY_TABS = ['Pour vous', 'Nouveautés', 'Proximité', 'Enregistrés']
+function readSaved(key: string): number[] { try { const data = JSON.parse(localStorage.getItem(key) || '[]'); return Array.isArray(data) ? data.filter(value => typeof value === 'number') : [] } catch { return [] } }
 
-export function DiscoveryPage({ go, notify, resolveRestaurant, restaurants, sharedPosts = [], filters, setFilters, scope, setScope }: CommonProps & {
+export function DiscoveryPage({ go, notify, resolveRestaurant, restaurants, sharedPosts = [], filters, setFilters, scope, setScope, hasCard }: CommonProps & {
   restaurants: Restaurant[]; filters: SearchFilters; setFilters: (filters: SearchFilters) => void
   scope: 'all' | 'restaurants' | 'members'; setScope: (scope: 'all' | 'restaurants' | 'members') => void
 }) {
   const [activeTab, setActiveTab] = useState('Pour vous')
   const [likedPosts, setLikedPosts] = useState<Set<number>>(new Set([1]))
-  const [savedPosts, setSavedPosts] = useState<Set<number>>(new Set())
+  const savedKey = `fidelity.saved-posts.${getAccount()?.user.id || 'demo'}`
+  const [savedPosts, setSavedPosts] = useState<Set<number>>(() => new Set(readSaved(savedKey)))
+  const [composer, setComposer] = useState(false)
+  const [publicPosts, setPublicPosts] = useState<FeedPost[]>([])
+  const [remoteLikes, setRemoteLikes] = useState(new Set<string>())
+  const [likeCounts, setLikeCounts] = useState<Record<string, number>>({})
+  const [busyActions, setBusyActions] = useState(new Set<string>())
+  const actions = useRef(new Set<string>())
+  useEffect(() => { try { localStorage.setItem(savedKey, JSON.stringify([...savedPosts])) } catch { notify('Le navigateur ne peut pas conserver les publications enregistrées.') } }, [savedPosts, savedKey])
   const [followed, setFollowed] = useState<Set<string>>(new Set(['restaurant:casa']))
   const [noticeVisible, setNoticeVisible] = useState(true)
   const [showFilters, setShowFilters] = useState(false)
@@ -36,6 +46,13 @@ export function DiscoveryPage({ go, notify, resolveRestaurant, restaurants, shar
   const showMembers = handleSearch || (scope !== 'restaurants' && !hasFilters)
   const showRestaurants = !handleSearch && scope !== 'members'
   const online = getBackendState().connected
+  useEffect(() => {
+    if (!online) return
+    let cancelled = false
+    void fetchPublicShares().then(shares => { if (!cancelled) setPublicPosts(shares.map(shareToFeedPost)) }).catch(() => {})
+    void fetchSocialState().then(state => { if (!cancelled) { setRemoteLikes(new Set(state.likedPostIds)); setFollowed(previous => new Set([...previous, ...state.followedMemberIds.map(id => `member:${id}`)])) } }).catch(() => {})
+    return () => { cancelled = true }
+  }, [online])
   const remoteMembers = useMemberSearch(query, online && showMembers)
   const matchedMembers = online ? remoteMembers.items : localMembers
   const changeFilters = (next: SearchFilters) => { setFilters(next); setScope('restaurants') }
@@ -66,14 +83,40 @@ export function DiscoveryPage({ go, notify, resolveRestaurant, restaurants, shar
   }
 
   const publishedShares = sharedPosts.filter((share) => share.status === 'published').map(shareToFeedPost)
-  const allPosts = [...publishedShares, ...feedPosts]
-  const visiblePosts =
-    activeTab === 'Pour vous' ? allPosts : activeTab === 'Nouveautés' ? [...allPosts].reverse() : []
+  const allPosts = [...new Map([...publishedShares, ...publicPosts].map(post => [post.backendId || post.id, post])).values(), ...feedPosts]
+  async function perform(key: string, operation: () => Promise<void>) {
+    if (actions.current.has(key)) return
+    actions.current.add(key); setBusyActions(new Set(actions.current))
+    try { await operation() } catch (cause) { notify(cause instanceof Error ? cause.message : 'Action impossible. Réessaie.') }
+    finally { actions.current.delete(key); setBusyActions(new Set(actions.current)) }
+  }
+  function like(post: FeedPost) {
+    if (!post.backendId) { toggleNumber(setLikedPosts, post.id); return }
+    void perform(`like:${post.backendId}`, async () => {
+      const result = await setPostLike(post.backendId!, !remoteLikes.has(post.backendId!))
+      setRemoteLikes(current => { const next = new Set(current); if (result.active) next.add(post.backendId!); else next.delete(post.backendId!); return next })
+      setLikeCounts(current => ({ ...current, [post.backendId!]: result.count }))
+    })
+  }
+  function follow(post: FeedPost, authorKey: string) {
+    if (!post.backendId || !post.memberId) { toggleFollow(authorKey); return }
+    void perform(authorKey, async () => { await setMemberFollow(post.memberId!, !followed.has(authorKey)); toggleFollow(authorKey) })
+  }
+  const distance = (id: string) => { const value = resolveRestaurant(id).distance.replace(',', '.'); return (parseFloat(value) || 0) * (value.includes('km') ? 1000 : 1) }
+  const visiblePosts = activeTab === 'Enregistrés' ? allPosts.filter(post => savedPosts.has(post.id))
+    : activeTab === 'Proximité' ? [...allPosts].sort((a, b) => distance(a.restaurantId) - distance(b.restaurantId)) : allPosts
+  async function shareRestaurant(id: string) {
+    const url = restaurantLink(id), title = resolveRestaurant(id).name
+    try {
+      if (navigator.share) await navigator.share({ title, text: 'Une adresse à découvrir sur Fidelity', url })
+      else { await navigator.clipboard.writeText(url); notify('Lien du restaurant copié.') }
+    } catch (cause) { if (!(cause instanceof DOMException && cause.name === 'AbortError')) notify('Le partage est indisponible. Ouvre la fiche du restaurant pour copier son adresse.') }
+  }
 
   return (
     <main className="page page-with-nav">
       <div className="discovery-titlebar">
-        <button className="round-button" type="button" aria-label="Créer" onClick={() => notify('La création arrive après le lancement fidélité')}>
+        <button className="round-button" type="button" aria-label="Partager ma visite" onClick={() => setComposer(true)}>
           <Plus size={24} strokeWidth={1.7} />
         </button>
         <h1 style={{ margin: 0 }}>Découvrir</h1>
@@ -138,19 +181,10 @@ export function DiscoveryPage({ go, notify, resolveRestaurant, restaurants, shar
       </div>
 
       <span className="preview-label">
-        <Clock3 size={15} /> Aperçu · réseau social à venir
+        <Clock3 size={15} /> Stories et suggestions de démonstration
       </span>
 
       <div className="stories-row">
-        <button className="story-item" type="button" onClick={() => notify('Votre story arrive bientôt')}>
-          <span className="story-circle">
-            F
-            <i>
-              <Plus size={13} strokeWidth={2.5} />
-            </i>
-          </span>
-          <small>Votre story</small>
-        </button>
         {[
           { name: 'Casa Verde', image: '/images/tacos.webp', index: 0, count: 4 },
           { name: 'Camille R.', image: '', index: 2, count: 2 },
@@ -168,7 +202,7 @@ export function DiscoveryPage({ go, notify, resolveRestaurant, restaurants, shar
 
       {noticeVisible && (
         <div className="inline-notice">
-          <span>La création de posts et stories arrivera après le lancement fidélité.</span>
+          <span>Après une visite créditée en caisse, le bouton + permet de publier votre FoodShare.</span>
           <button type="button" onClick={() => setNoticeVisible(false)}>
             Fermer
           </button>
@@ -178,7 +212,7 @@ export function DiscoveryPage({ go, notify, resolveRestaurant, restaurants, shar
       {visiblePosts.length ? (
         visiblePosts.map((post) => {
           const restaurant = resolveRestaurant(post.restaurantId)
-          const liked = likedPosts.has(post.id)
+          const liked = post.backendId ? remoteLikes.has(post.backendId) : likedPosts.has(post.id)
           const saved = savedPosts.has(post.id)
           const authorRoute = feedAuthorRoute(post)
           const authorKey = post.authorType === 'member' ? `member:${post.memberId}` : `restaurant:${post.restaurantId}`
@@ -188,7 +222,7 @@ export function DiscoveryPage({ go, notify, resolveRestaurant, restaurants, shar
             else notify('Le profil de cette personne n’est plus disponible.')
           }
           return (
-            <article className="feed-post" key={post.id}>
+            <article className="feed-post" key={post.backendId || post.id}>
               <header>
                 <button type="button" className="avatar" aria-label={`Voir le compte de ${post.author}`} onClick={openAuthor} style={{ backgroundImage: `url(${post.image})` }}>
                   {!post.image && post.author.slice(0, 1)}
@@ -203,23 +237,23 @@ export function DiscoveryPage({ go, notify, resolveRestaurant, restaurants, shar
                 <button
                   className={`follow-button ${isFollowing ? 'following' : ''}`}
                   type="button"
-                  disabled={!authorRoute}
-                  onClick={() => toggleFollow(authorKey)}
+                  disabled={!authorRoute || busyActions.has(authorKey) || (post.backendId !== undefined && post.memberId === getAccount()?.user.id)}
+                  onClick={() => follow(post, authorKey)}
                 >
                   {isFollowing ? 'Suivi' : 'Suivre'}
                 </button>
               </header>
-              <button className="post-image" type="button" onClick={() => go('restaurant', { restaurantId: post.restaurantId })}>
+              <button className="post-image" type="button" aria-label={`Voir ${restaurant.name}`} onClick={() => go('restaurant', { restaurantId: post.restaurantId })}>
                 <img src={post.image} alt="" />
               </button>
               <div className="post-actions">
-                <button type="button" className={liked ? 'active' : ''} onClick={() => toggleNumber(setLikedPosts, post.id)} aria-label="Aimer">
+                <button type="button" className={liked ? 'active' : ''} disabled={busyActions.has(`like:${post.backendId}`)} onClick={() => like(post)} aria-label="Aimer" aria-pressed={liked}>
                   <Heart fill={liked ? 'currentColor' : 'none'} />
                 </button>
-                <button type="button" aria-label="Commenter" onClick={() => notify('Les commentaires arrivent avec les comptes')}>
+                <button type="button" aria-label="Donner mon avis sur ce restaurant" onClick={() => go('foodshareCompose', { restaurantId: post.restaurantId })}>
                   <MessageCircle />
                 </button>
-                <button type="button" aria-label="Partager" onClick={() => notify('Le partage sera activé avec les comptes Fidelity')}>
+                <button type="button" aria-label="Partager le restaurant" onClick={() => void shareRestaurant(post.restaurantId)}>
                   <Send />
                 </button>
                 <button type="button" className={saved ? 'active' : ''} onClick={() => toggleNumber(setSavedPosts, post.id)} aria-label="Enregistrer">
@@ -227,7 +261,7 @@ export function DiscoveryPage({ go, notify, resolveRestaurant, restaurants, shar
                 </button>
               </div>
               <div className="post-copy">
-                <strong>{post.likes + (liked ? 1 : 0)} coups de cœur</strong>
+                <strong>{post.backendId ? likeCounts[post.backendId] ?? post.likes : post.likes + (liked ? 1 : 0)} coups de cœur</strong>
                 <p>
                   <button className="post-author" type="button" onClick={openAuthor}>{post.author}</button> {post.text}
                 </p>
@@ -253,6 +287,12 @@ export function DiscoveryPage({ go, notify, resolveRestaurant, restaurants, shar
       )}
         </>
       )}
+      <Dialog open={composer} onOpenChange={setComposer}>
+        <DialogContent><DialogTitle>Partager ma visite</DialogTitle><DialogDescription>Choisis une de tes cartes. Une visite créditée en caisse est nécessaire pour publier un FoodShare.</DialogDescription>
+          <div className="compose-restaurants">{restaurants.filter(item => hasCard(item.id)).map(item => <button className="settings-row" type="button" key={item.id} onClick={() => { setComposer(false); go('foodshareCompose', { restaurantId: item.id }) }}><span><Store size={18} /></span><span><strong>{item.name}</strong></span><ChevronRight size={18} /></button>)}</div>
+          <button className="outline-button full" type="button" onClick={() => { setComposer(false); go('loyalty') }}>Voir mes cartes</button>
+        </DialogContent>
+      </Dialog>
     </main>
   )
 }

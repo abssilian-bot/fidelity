@@ -1124,3 +1124,20 @@ textarea { resize: vertical; }
 .member-qr p { margin: 0; line-height: 1.6; font-size: 14px; }.member-qr small { color: var(--muted); }
 .qr-paper { padding: 8px; border-radius: 16px; background: white; }.qr-paper svg { display: block; max-width: 100%; height: auto; }
 @media (max-width: 360px) { .camera-guide { left: 30px; right: 30px; }.scan-presets { gap: 6px; } }
+
+.address-card { color: inherit; text-decoration: none; }
+.qr-poster-actions { display: grid; gap: 12px; margin-top: 24px; }
+.compose-restaurants { max-height: 50vh; overflow-y: auto; display: grid; gap: 8px; }
+.poster svg, .qr-frame svg { flex-shrink: 0; max-width: 100%; height: auto; }
+.qr-poster-page .poster { align-items: center; text-align: center; }
+@media print {
+  @page { size: A4 portrait; margin: 15mm; }
+  body:has(.qr-poster-page) { background: white; }
+  body:has(.qr-poster-page) .stage,
+  body:has(.qr-poster-page) .app-shell,
+  body:has(.qr-poster-page) .qr-poster-page { display: block; width: 100%; max-width: none; min-height: 0; margin: 0; padding: 0; box-shadow: none; border: none; }
+  body:has(.qr-poster-page) .app-shell > :not(.qr-poster-page),
+  .qr-poster-page > :not(.poster) { display: none !important; }
+  .qr-poster-page .poster { margin: 0; padding: 24mm 12mm; gap: 12mm; break-inside: avoid; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .qr-poster-page .poster svg { width: 80mm; height: 80mm; }
+}

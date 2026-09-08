@@ -4,6 +4,7 @@ import type { PrismaClient, Prisma } from '@prisma/client'
 import { searchProfileFields } from '../lib/search-profile.js'
 import { safeImage, safeUrl } from '../lib/urls.js'
 import { balanceOf } from '../lib/ledger.js'
+import { markRestaurantWalletsChanged } from '../lib/wallet-updates.js'
 
 const listQuery = z.object({
   diet: z.string().max(50).optional(),       // ex: "Halal"
@@ -23,6 +24,11 @@ const updateRestaurant = z
     imageUrl: safeImage,
     menuPdfUrl: safeUrl.nullable(),
     deliverooUrl: safeUrl.nullable(),
+    offers: z.array(z.object({
+      id: z.number().int().nonnegative(), kind: z.enum(['happyhour', 'duo', 'discount', 'special']),
+      title: z.string().trim().min(1).max(120), detail: z.string().max(500), schedule: z.string().max(200),
+      days: z.array(z.number().int().min(0).max(6)).max(7).optional(), startHour: z.number().min(0).max(24).optional(), endHour: z.number().min(0).max(24).optional(),
+    }).strict()).max(30),
     ...searchProfileFields,
   })
   .partial()
@@ -42,6 +48,7 @@ const publicSelect = {
   id: true, name: true, slug: true, cuisine: true, description: true,
   address: true, district: true, lat: true, lng: true, hours: true,
   diets: true, imageUrl: true, menuPdfUrl: true, deliverooUrl: true,
+  offers: true,
   foodTags: true, services: true, avgPrice: true, maxGuests: true,
 } satisfies Prisma.RestaurantSelect
 
@@ -115,7 +122,11 @@ export function restaurantRoutes(app: FastifyInstance, prisma: PrismaClient) {
     if ('error' in check && check.error) {
       return reply.code(check.error).send({ error: check.error === 404 ? 'Restaurant introuvable.' : 'Accès interdit : ce restaurant ne t’appartient pas.' })
     }
-    return prisma.restaurant.update({ where: { id }, data, select: publicSelect })
+    return prisma.$transaction(async tx => {
+      const saved = await tx.restaurant.update({ where: { id }, data, select: publicSelect })
+      await markRestaurantWalletsChanged(tx, id)
+      return saved
+    })
   })
 
   app.put('/restaurants/:id/program', { preHandler: app.authenticate }, async (req, reply) => {
@@ -125,10 +136,10 @@ export function restaurantRoutes(app: FastifyInstance, prisma: PrismaClient) {
     if ('error' in check && check.error) {
       return reply.code(check.error).send({ error: check.error === 404 ? 'Restaurant introuvable.' : 'Accès interdit : ce restaurant ne t’appartient pas.' })
     }
-    return prisma.loyaltyProgram.upsert({
-      where: { restaurantId: id },
-      update: data,
-      create: { ...data, restaurantId: id },
+    return prisma.$transaction(async tx => {
+      const saved = await tx.loyaltyProgram.upsert({ where: { restaurantId: id }, update: data, create: { ...data, restaurantId: id } })
+      await markRestaurantWalletsChanged(tx, id)
+      return saved
     })
   })
 

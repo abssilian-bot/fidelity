@@ -20,7 +20,7 @@ export function RestaurantCard({ restaurant, favorite, onFavorite, onOpen, large
   const hoursKnown = openingHoursOf(restaurant).some((day) => day.day === clock.day)
   return (
     <article className={`restaurant-card ${large ? 'large' : ''} ${compact ? 'compact' : ''}`}>
-      <button className="restaurant-image-button" type="button" onClick={onOpen}>
+      <button className="restaurant-image-button" type="button" onClick={onOpen} aria-label={`Voir ${restaurant.name}`}>
         <img src={restaurant.image} alt="" />
       </button>
       <HeartButton active={favorite} onClick={onFavorite} small />

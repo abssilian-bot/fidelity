@@ -1,4 +1,5 @@
-import { ChevronRight, Database, FlaskConical, LayoutGrid, Star, Store, Trash2 } from 'lucide-react'
+import { useState } from 'react'
+import { ChevronRight, Database, Star, Store, Trash2 } from 'lucide-react'
 import { getMember, userReviews, userVisits } from '../data'
 import type { CommonProps } from '../nav'
 import { Tabs } from '../components/kit'
@@ -7,7 +8,7 @@ import { ProfileStats } from '../components/ProfileStats'
 import { getAccount } from '../lib/api'
 
 function UserProfileSummary({ onOpen, liked = 3, visits = 15, reviews = 2, onOpenLiked, onOpenVisits, onOpenReviews }: {
-  onOpen: () => void
+  onOpen?: () => void
   liked?: number
   visits?: number
   reviews?: number
@@ -15,20 +16,22 @@ function UserProfileSummary({ onOpen, liked = 3, visits = 15, reviews = 2, onOpe
   onOpenVisits?: () => void
   onOpenReviews?: () => void
 }) {
+  const [tab, setTab] = useState('Publications')
+  const Identity = onOpen ? 'button' : 'div'
   return (
     <section className="profile-summary">
       <h2 style={{ margin: 0 }}>Profil utilisateur</h2>
       <p className="muted" style={{ margin: 0, fontSize: 13.5 }}>
         Ce que les autres membres voient lorsqu’ils ouvrent votre profil.
       </p>
-      <button className="profile-identity" type="button" onClick={onOpen}>
+      <Identity className="profile-identity" onClick={onOpen}>
         <span className="profile-avatar">CR</span>
         <span>
           <strong>Camille Robert</strong>
           <small>@camilleatable</small>
           <em>Camille · Robert</em>
         </span>
-      </button>
+      </Identity>
       <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.55 }}>
         Toujours partante pour une grande tablée, un bouillon réconfortant et les adresses qui prennent soin des
         végétariens.
@@ -41,12 +44,12 @@ function UserProfileSummary({ onOpen, liked = 3, visits = 15, reviews = 2, onOpe
         { label: 'visites', value: visits, onClick: onOpenVisits },
         { label: 'avis', value: reviews, onClick: onOpenReviews },
       ]} />
-      <Tabs values={['Publications', 'À propos']} active="Publications" onChange={() => {}} />
-      <div className="profile-grid">
+      <Tabs values={['Publications', 'À propos']} active={tab} onChange={setTab} />
+      {tab === 'Publications' ? <div className="profile-grid">
         <img src="/images/table.webp" alt="" />
         <img src="/images/ramen.webp" alt="" />
         <img src="/images/tacos.webp" alt="" />
-      </div>
+      </div> : <p className="muted">Cuisine végétarienne, tables conviviales et bonnes adresses parisiennes. Profil de démonstration.</p>}
     </section>
   )
 }
@@ -77,7 +80,7 @@ export function SettingsPage({ go, favorites, toggleFavorite, resolveRestaurant,
       <section style={{ marginTop: 26 }}>
         <h2 style={{ margin: '0 0 4px' }}>Restaurants likés</h2>
         <p className="muted" style={{ margin: '0 0 4px', fontSize: 13 }}>
-          Les restaurants que vous avez aimés, synchronisés avec votre profil public.
+          Les restaurants que vous avez enregistrés sur cet appareil.
         </p>
         <div className="saved-restaurants">
           {savedRestaurants.map((saved) => (
@@ -101,15 +104,10 @@ export function SettingsPage({ go, favorites, toggleFavorite, resolveRestaurant,
         </div>
       </section>
 
-      <section style={{ marginTop: 26 }}>
-        <h2 style={{ margin: '0 0 4px' }}>Préférences de découverte</h2>
-        <p className="muted" style={{ margin: 0, fontSize: 13 }}>
-          La page Discovery respecte cette distance et ces choix alimentaires.
-        </p>
-      </section>
+      <button className="settings-row" type="button" onClick={() => go('discovery')}><span><ChevronRight size={18} /></span><span><strong>Préférences de découverte</strong><small>Choisir une distance, une cuisine ou un régime.</small></span></button>
 
       <section style={{ marginTop: 26, display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <h2 style={{ margin: 0 }}>Démonstration</h2>
+        <h2 style={{ margin: 0 }}>Espace restaurateur</h2>
         <button className="settings-row" type="button" onClick={() => switchRole?.('restaurant')}>
           <span>
             <Store size={18} />
@@ -120,32 +118,12 @@ export function SettingsPage({ go, favorites, toggleFavorite, resolveRestaurant,
           </span>
           <ChevronRight size={18} color="var(--muted-soft)" />
         </button>
-        <button className="settings-row" type="button">
-          <span>
-            <FlaskConical size={18} />
-          </span>
-          <span>
-            <strong style={{ fontSize: 14.5 }}>Laboratoire de démonstration</strong>
-            <small>Activez les états normaux, d’erreur et d’accessibilité.</small>
-          </span>
-          <ChevronRight size={18} color="var(--muted-soft)" />
-        </button>
-        <button className="settings-row" type="button">
-          <span>
-            <LayoutGrid size={18} />
-          </span>
-          <span>
-            <strong style={{ fontSize: 14.5 }}>Galerie des composants</strong>
-            <small>Consultez les composants et leurs états de référence.</small>
-          </span>
-          <ChevronRight size={18} color="var(--muted-soft)" />
-        </button>
       </section>
 
       <section style={{ marginTop: 26 }}>
         <h2 style={{ margin: '0 0 10px' }}>Données locales</h2>
         <button className="outline-button full" type="button" onClick={() => window.location.reload()}>
-          <Database size={17} /> Réinitialiser les données locales
+          <Database size={17} /> Actualiser les données
         </button>
       </section>
     </main>
@@ -166,7 +144,6 @@ export function UserProfilePage({ go, favorites, toggleFavorite, resolveRestaura
         </div>
       </div>
       <UserProfileSummary
-        onOpen={() => {}}
         liked={favorites.size}
         visits={totalVisits}
         reviews={myReviews.length}

@@ -71,16 +71,16 @@ export function RestaurantPage({ go, restaurant, favorites, toggleFavorite, shar
         </button>
       </section>
 
-      <button className="address-card" type="button">
+      <a className="address-card" href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(restaurant.address + ', ' + restaurant.district)}`} target="_blank" rel="noopener noreferrer">
         <span>
           <MapPin size={20} />
         </span>
         <span>
           <strong style={{ fontSize: 14.5 }}>{restaurant.address}</strong>
-          <small>Appuyer pour choisir votre application d’itinéraire</small>
+          <small>Ouvrir l’itinéraire</small>
         </span>
         <Navigation size={19} fill="currentColor" />
-      </button>
+      </a>
 
       <Tabs values={['Publications', 'Menu', 'Infos & promos']} active={activeTab} onChange={setActiveTab} />
 

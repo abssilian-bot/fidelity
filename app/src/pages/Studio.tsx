@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { QRCodeSVG } from 'qrcode.react'
 import { Check, CreditCard, Edit3, Gift, Plus, Settings2, Trash2 } from 'lucide-react'
 import { loyaltyRule } from '../data'
 import type { Loyalty, MenuItem, Offer, Restaurant, RewardTier } from '../data'
 import type { CommonProps } from '../nav'
 import { LoyaltyCard, Notice, Tabs } from '../components/kit'
-import { publishProfile, publishProgram } from '../lib/api'
+import { publishProfile, publishProgram, restaurantLink } from '../lib/api'
 import { SearchProfileEditor } from '../components/SearchProfileEditor'
 import { searchProfileSchema } from '../lib/search-profile'
 import type { SearchProfile } from '../lib/search-profile'
@@ -49,10 +50,10 @@ export function ProfileEditorPage({ go, draft, setDraft, menu, setMenu, offers =
     if (!restaurantId || publishing) return
     if (!searchProfileSchema.safeParse(draft).success) { notify('Vérifiez le budget, la capacité et les horaires avant de publier.'); return }
     setPublishing(true)
-    const ok = await publishProfile(restaurantId, draft, menu)
+    const ok = await publishProfile(restaurantId, draft, menu, offers)
     setPublishing(false)
     notify(ok === 'unsupported' ? 'La synchronisation des critères nécessite la mise à jour du serveur. Ils restent conservés sur cet appareil.'
-      : ok ? 'Profil, critères de recherche et menu publiés ✅' : 'Publication impossible — serveur hors ligne, brouillon conservé en local')
+      : ok ? 'Profil, menu et offres publiés sur le serveur' : 'Publication impossible — vérifie ta connexion et les champs du formulaire. Ton brouillon reste affiché.')
   }
 
   const updateMenu = (field: keyof MenuItem, value: string) => {
@@ -223,8 +224,8 @@ export function ProfileEditorPage({ go, draft, setDraft, menu, setMenu, offers =
                 onChange={(event) => updateMenu('price', `${event.target.value.replace('.', ',')} €`)}
               />
             </label>
-            <button className="outline-button full" type="button" onClick={() => notify('Plat enregistré dans l’aperçu local')}>
-              Enregistrer dans l’aperçu local
+            <button className="outline-button full" type="button" disabled={publishing} onClick={() => void publish()}>
+              {publishing ? 'Publication…' : 'Publier la façade et le menu'}
             </button>
             <button className="danger-button full" type="button" onClick={removeDish}>
               <Trash2 size={16} /> Retirer ce plat
@@ -302,8 +303,8 @@ export function ProfileEditorPage({ go, draft, setDraft, menu, setMenu, offers =
                 onChange={(event) => updateOffer('schedule', event.target.value)}
               />
             </label>
-            <button className="outline-button full" type="button" onClick={() => notify('Offre enregistrée dans l’aperçu local')}>
-              Enregistrer dans l’aperçu local
+            <button className="outline-button full" type="button" disabled={publishing} onClick={() => void publish()}>
+              {publishing ? 'Publication…' : 'Publier la façade et les offres'}
             </button>
             <button className="danger-button full" type="button" onClick={removeOffer}>
               <Trash2 size={16} /> Retirer cette offre
@@ -574,32 +575,18 @@ export function LoyaltyEditorPage({ go, restaurant, draft, setDraft, notify }: C
   )
 }
 
-const QR_PATTERN = [
-  1,1,1,0,1,0,1,1,1,
-  1,0,1,0,0,1,1,0,1,
-  1,1,1,0,1,1,0,1,1,
-  0,0,0,1,0,0,1,0,0,
-  1,0,1,1,1,0,1,1,0,
-  0,1,0,0,1,1,0,0,1,
-  1,1,1,0,1,0,1,1,1,
-  1,0,1,1,0,1,1,0,1,
-  1,1,1,0,1,1,0,1,1,
-]
-
-/** Chaque restaurant a son propre QR : on décale le motif selon l'identifiant. */
-const qrPatternFor = (id: string) => {
-  const hash = [...id].reduce((total, char, index) => total + char.charCodeAt(0) * (index + 1), 0)
-  return QR_PATTERN.map((cell, index) => {
-    const inFinder = (index < 21 && index % 9 < 3) || (index < 27 && index % 9 > 5) || (index > 53 && index % 9 < 3)
-    if (inFinder) return cell // les trois coins repères restent fixes
-    return (cell + ((index + hash) % 7 === 0 ? 1 : 0)) % 2
-  })
-}
-
 export function QrPosterPage({ restaurant }: CommonProps & { restaurant: Restaurant }) {
-  const pattern = qrPatternFor(restaurant.id)
+  const qr = useRef<SVGSVGElement>(null)
+  const url = restaurantLink(restaurant.id)
+  const download = () => {
+    if (!qr.current) return
+    const blob = new Blob([new XMLSerializer().serializeToString(qr.current)], { type: 'image/svg+xml' })
+    const href = URL.createObjectURL(blob), link = document.createElement('a')
+    link.href = href; link.download = `Fidelity-QR-${restaurant.id}.svg`; link.click()
+    window.setTimeout(() => URL.revokeObjectURL(href), 1000)
+  }
   return (
-    <main className="page">
+    <main className="page qr-poster-page">
       <div className="detail-header">
         <div>
           <span className="eyebrow">QR & affiche</span>
@@ -611,14 +598,10 @@ export function QrPosterPage({ restaurant }: CommonProps & { restaurant: Restaur
       </div>
 
       <section className="qr-frame">
-        <div className="qr-grid">
-          {pattern.map((cell, index) => (
-            <span key={index} className={cell ? '' : 'off'} />
-          ))}
-        </div>
+        <QRCodeSVG ref={qr} value={url} size={240} level="M" marginSize={4} title={`Ouvrir la carte ${restaurant.name}`} />
         <strong style={{ fontSize: 15 }}>QR public d’inscription</strong>
         <p className="muted" style={{ margin: 0, fontSize: 13, textAlign: 'center' }}>
-          Le client scanne, ouvre la page du restaurant et rejoint « {restaurant.loyalty.title} » en dix secondes.
+          Le client scanne et ouvre la page du restaurant pour ajouter sa carte « {restaurant.loyalty.title} ».
         </p>
       </section>
 
@@ -627,15 +610,18 @@ export function QrPosterPage({ restaurant }: CommonProps & { restaurant: Restaur
         <small>Fidelity · Programme de fidélité</small>
         <h2 style={{ margin: 0, color: '#f7e4cd' }}>{restaurant.name}</h2>
         <p style={{ margin: 0, fontSize: 14, opacity: 0.85 }}>{restaurant.loyalty.reward}</p>
+        <QRCodeSVG value={url} size={220} level="M" marginSize={4} title={`Rejoindre ${restaurant.name}`} />
         <p style={{ margin: '6px 0 0', fontSize: 13, opacity: 0.7 }}>
-          Scannez le code en caisse pour gagner {restaurant.loyalty.type === 'stamps' ? 'des coches' : 'des points'} à
-          chaque visite.
+          Scannez pour ajouter votre carte. Présentez ensuite votre QR personnel en caisse à chaque visite.
         </p>
       </section>
 
-      <Notice title="Aperçu d’impression">
-        L’affiche finale sera générée en PDF depuis l’espace restaurateur, avec le vrai QR lié à votre compte.
-      </Notice>
+      <div className="qr-poster-actions">
+        <button className="primary-button full" type="button" onClick={() => window.print()}>Imprimer l’affiche / Enregistrer en PDF</button>
+        <button className="outline-button full" type="button" onClick={download}>Télécharger le QR en SVG</button>
+        <a className="text-link" href={url} target="_blank" rel="noopener noreferrer">Tester le lien d’inscription</a>
+      </div>
+      {['localhost', '127.0.0.1'].includes(window.location.hostname) && <Notice title="Aperçu local">Pour une affiche utilisable par les clients, ouvre cet écran sur le site public Fidelity : le QR utilise l’adresse du site actuellement ouvert.</Notice>}
     </main>
   )
 }
