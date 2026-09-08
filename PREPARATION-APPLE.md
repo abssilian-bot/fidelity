@@ -5,7 +5,7 @@ Le dépôt est une application web React et une API Fastify. Il ne contient pas 
 ## Livré dans le code
 
 - Scan caméra, lecture d'image et code de secours ; crédits et récompenses contrôlés par le serveur, reprise sans double comptage.
-- Export Wallet signé et service complet de mise à jour ; activation publique soumise à l'installation des secrets sur Render puis à un essai iPhone réel. Voir `CARTES-WALLET.md`.
+- Export Wallet signé et service complet de mise à jour ; certificats installés sur Render, activation serveur confirmée en public. Installation et mise à jour sur iPhone réel restant à valider. Voir `CARTES-WALLET.md`.
 - Vrai QR d'inscription, lien direct vers le restaurant, export SVG et impression/PDF.
 - Enregistrement serveur des offres depuis la Façade. Le bouton de sauvegarde du menu publie également les données.
 - Likes et abonnements des véritables publications/profils enregistrés en base, compteurs serveur ; chargement des FoodShare publics.
@@ -20,7 +20,7 @@ Le dépôt est une application web React et une API Fastify. Il ne contient pas 
 5. Vérifier l'envoi de liens de connexion aux adresses externes : `onboarding@resend.dev` sans domaine vérifié est limité à l'adresse du compte Resend. Le compte de test Apple doit pouvoir se connecter sans dépendre de la boîte personnelle de l'éditeur.
 6. Fournir un compte de démonstration utilisable par Apple, un restaurant autorisé et des instructions permettant d'essayer le scan et Wallet. Le choix d'interface restaurateur n'accorde aucun droit de propriété.
 7. Retirer ou finaliser les parcours encore présentés comme démonstrations : stories, carte géographique illustrée et préparation locale de nouveaux établissements. Les photos FoodShare proposées sont des images d'exemple ; le téléversement de photos personnelles reste à développer. Les favoris restaurant et les brouillons ne sont pas encore synchronisés entre appareils. Le registre de récompenses utilise actuellement un objectif unique, même si l'éditeur local permet de préparer plusieurs paliers.
-8. Vérifier la version réellement déployée, les migrations, les certificats et les essais caméra/Wallet sur les appareils cibles. Une compilation ou une suite de tests locale ne prouve pas leur fonctionnement sur iPhone en production.
+8. Effectuer les essais caméra/Wallet sur les appareils cibles. Le commit `b21f5de`, les migrations et l'activation Wallet ont été vérifiés sur le serveur public le 8 septembre 2026 à 23 h 27 ; cela ne prouve pas encore l'installation du pass ni la réception d'une mise à jour sur iPhone.
 
 Les critères pertinents sont la complétude (2.1), le contenu utilisateur (1.2), la fonctionnalité minimale (4.2) et la confidentialité/suppression de compte (5.1.1). Ils motivent cette liste, sans préjuger de la décision d'Apple. [Règles officielles App Review](https://developer.apple.com/app-store/review/guidelines/).
 

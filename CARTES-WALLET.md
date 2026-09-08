@@ -12,6 +12,8 @@ Le bouton d'export dépend de `GET /wallet/status`. Avec une configuration valid
 
 Le certificat Apple Pass Type ID a été créé et téléchargé le 8 septembre 2026. La correspondance avec la clé privée, la signature par le certificat intermédiaire Apple G4, la validité et la génération d'un pass avec ce véritable certificat ont été vérifiées localement. La clé et les certificats sont hors Git dans `.local/apple-wallet/certs/`.
 
+**Activation publique vérifiée le 8 septembre 2026 à 23 h 27 (Paris).** Le commit applicatif `b21f5dea6bcf1624a0ca5073487776599cc26ac6` est en ligne sur `https://fidelity-api-mcld.onrender.com`. Les trois fichiers PEM sont installés dans les fichiers secrets Render et `NODE_ENV=production` est défini. Le service confirme `GET /wallet/status → {"enabled":true}`. Le Pass Type ID est `pass.com.fidelity.4tftjg23p4.loyalty`, pour l'équipe `4TFTJG23P4`, et le certificat expire le 8 octobre 2027. L'installation et la réception des mises à jour sur un iPhone restent à valider.
+
 ### Variables sur le serveur public
 
 | Variable | Valeur attendue |
@@ -41,9 +43,11 @@ Cette distinction évite qu'une copie du QR Wallet serve à dépenser un solde. 
 
 ## Vérifications et activation
 
-Les migrations `20260908010000_apple_wallet` et `20260908020000_restaurant_offers` ont été appliquées sur PostgreSQL local. Les nouvelles tables Wallet ont RLS activée et aucun droit SQL public. `backend/scripts/test-wallet.mjs` vérifie 17 scénarios : signature PKCS7, manifeste, accès, QR, doublons, expiration, protocole Apple et reprises APNs. Ce test utilise des certificats de test et un transport APNs simulé dans une base locale jetable.
+Les migrations `20260908010000_apple_wallet` et `20260908020000_restaurant_offers` ont été appliquées sur PostgreSQL local puis sur la base de production par `npm run start:render`. Les migrations de sécurisation du registre et de fermeture des accès SQL publics ont également été appliquées en production. Les nouvelles tables Wallet ont RLS activée et aucun droit SQL public. `backend/scripts/test-wallet.mjs` vérifie 17 scénarios : signature PKCS7, manifeste, accès, QR, doublons, expiration, protocole Apple et reprises APNs. Ce test utilise des certificats de test et un transport APNs simulé dans une base locale jetable.
 
-Avant de déclarer Wallet opérationnel en production : installer les fichiers secrets sur Render, appliquer les migrations avec `npm run start:render`, vérifier `/wallet/status`, ajouter une vraie carte depuis Safari sur iPhone, créditer depuis un second appareil et constater le nouveau solde dans Wallet. Tester aussi une récompense depuis le QR temporaire Fidelity. La réception physique APNs et la caméra iPhone ne peuvent pas être validées depuis cet ordinateur seul.
+Vérifications publiques effectuées : page HTML issue de la nouvelle compilation (`index-BwiMjcm4.js`), santé API, activation Wallet, restaurants et FoodShare publics accessibles ; adhésions, téléchargement Wallet avec token invalide et récupération d'un pass sans authentification refusés (401). Aucun e-mail ni crédit de points réel n'a été généré par ces vérifications.
+
+Pour terminer l'essai réel : depuis Safari sur iPhone, se connecter par e-mail, ajouter une carte, puis utiliser **Ajouter au Wallet**. Depuis un second appareil connecté au propriétaire du restaurant, créditer la carte et constater le nouveau solde dans Wallet. Tester aussi une récompense depuis le QR temporaire Fidelity. Le choix de l'interface restaurateur n'accorde aucun droit sur un établissement : le compte doit lui être rattaché. La réception physique APNs et la caméra iPhone ne peuvent pas être validées depuis cet ordinateur seul.
 
 Le QR d'affiche restaurant est désormais un vrai QR d'inscription avec lien `?restaurant=slug`, téléchargement SVG et impression/PDF. Générer les affiches depuis le site public ; `127.0.0.1` ne permet pas aux téléphones des clients d'ouvrir le site.
 
