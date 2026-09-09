@@ -39,4 +39,8 @@ L’expéditeur `onboarding@resend.dev` limite les envois à l’adresse du comp
 
 Tests automatisés : inscription/validation 17, auth 12, comptes frontend 13 ; régression API 27, FoodShare 20, sécurité 30, Wallet 17, recherche/adhésion backend 14 et recherche/cartes/scan/Discovery frontend 67, soit **217 vérifications réussies**. Compilation TypeScript backend et build frontend vérifiés. Aucun dossier de test créé dans la base publique.
 
+Déploiement du 9 septembre 2026 vers 18 h 49 (Paris) : commit applicatif `882bb3b`, bundle public `index-xeuTx5A3.js`, neuvième migration appliquée avec succès. L’adresse administrateur désignée est configurée dans l’environnement privé Render. Contrôle public : accueil et API disponibles, nouvelles routes privées en 401 sans session, Apple Wallet toujours activé, six restaurants et deux publications conservés. Aucun e-mail de test réel envoyé.
+
+Essai navigateur sur une base locale isolée : connexion par le bouton dev, dépôt d’un dossier fictif en attente, absence d’accès au scan, connexion administrateur, consultation et refus motivé, filtre des dossiers refusés ; message explicite après arrêt de l’API de test. Vérification visuelle de l’écran de connexion et du détail administratif. L’aperçu utilisateur sur le port 7100 reste ouvert sur la connexion restaurateur, avec l’API principale démarrée.
+
 Sources du registre : [API publique](https://www.data.gouv.fr/dataservices/api-recherche-dentreprises), [contrat OpenAPI](https://recherche-entreprises.api.gouv.fr/openapi.json).
