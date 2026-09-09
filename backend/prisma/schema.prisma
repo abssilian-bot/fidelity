@@ -24,6 +24,12 @@ enum RestaurantStatus {
   SUSPENDED
 }
 
+enum ApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum ProgramType {
   STAMPS
   POINTS
@@ -102,6 +108,40 @@ model User {
   followers    Follow[]          @relation("Followed")
   favorites    RestaurantFavorite[]
   reviews      Review[]
+  restaurantApplications RestaurantApplication[] @relation("Applicant")
+  reviewedApplications RestaurantApplication[] @relation("ApplicationReviewer")
+}
+
+// Dossier privé : aucune autorisation de caisse avant décision d'un administrateur.
+model RestaurantApplication {
+  id String @id @default(cuid())
+  applicantId String
+  applicant User @relation("Applicant", fields: [applicantId], references: [id], onDelete: Cascade)
+  siret String
+  tradingName String
+  cuisine String
+  address String
+  postalCode String
+  city String
+  contactName String
+  contactRole String
+  phone String
+  website String @default("")
+  message String @default("")
+  registry Json
+  status ApplicationStatus @default(PENDING)
+  decisionReason String @default("")
+  verificationNote String @default("")
+  reviewHistory Json @default("[]")
+  reviewerId String?
+  reviewer User? @relation("ApplicationReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  reviewedAt DateTime?
+  restaurantId String? @unique
+  restaurant Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([applicantId, siret])
+  @@index([status, createdAt])
 }
 
 model Restaurant {
@@ -136,6 +176,9 @@ model Restaurant {
   posts       Post[]
   reviews     Review[]
   favorites   RestaurantFavorite[]
+  application RestaurantApplication?
+
+  @@unique([siret])
 }
 
 model MenuItem {

@@ -3,7 +3,7 @@ import { ArrowRight, Building2, Check, ChevronRight, CopyPlus, Gift, QrCode, Rot
 import { programClients, recentScans } from '../data'
 import type { Restaurant } from '../data'
 import type { AppRole, CommonProps } from '../nav'
-import { fetchClients, getBackendState } from '../lib/api'
+import { fetchClients, getAccount, getBackendState } from '../lib/api'
 
 /** Écran d'entrée façon inscription : on choisit son interface. */
 export function RolePickerPage({ onSelect }: { onSelect: (role: AppRole) => void }) {
@@ -64,7 +64,7 @@ export function RolePickerPage({ onSelect }: { onSelect: (role: AppRole) => void
         Continuer <ArrowRight size={18} />
       </button>
       <p className="microcopy" style={{ textAlign: 'center' }}>
-        Démonstration — vous pourrez changer d’interface à tout moment depuis les réglages.
+        Vous pourrez changer d’espace depuis les réglages. L’accès professionnel nécessite un établissement validé.
       </p>
     </main>
   )
@@ -361,7 +361,7 @@ export function RestoPlacesPage({ go, restaurant, restaurants, archivedRestauran
           <span className="eyebrow">Espace restaurateur</span>
           <h1 style={{ margin: '6px 0 4px' }}>Mes établissements</h1>
           <p className="muted" style={{ margin: 0, fontSize: 14 }}>
-            Basculez entre vos établissements. Les nouveaux brouillons ci-dessous restent sur cet appareil.
+            Basculez entre vos établissements ou suivez l’inscription d’une nouvelle adresse.
           </p>
         </div>
       </div>
@@ -430,7 +430,12 @@ export function RestoPlacesPage({ go, restaurant, restaurants, archivedRestauran
       )}
 
       <section className="dashboard-section">
-        <h2 style={{ margin: 0 }}>Préparer un établissement</h2>
+        <h2 style={{ margin: 0 }}>Inscrire un établissement</h2>
+        <p className="muted">Chaque adresse possède son propre SIRET et son dossier de validation.</p>
+        <button className="primary-button full" type="button" onClick={() => go('restoRegistration')}><Building2 size={18} /> Mes inscriptions et nouveaux établissements</button>
+      </section>
+      {!getAccount() && !getBackendState().connected && <section className="dashboard-section">
+        <h2 style={{ margin: 0 }}>Préparer un établissement de démonstration</h2>
         <p className="muted">Brouillons de démonstration. Un établissement réel doit être validé et rattaché à votre compte avant de pouvoir publier ou scanner.</p>
         <div className="role-options" style={{ margin: 0 }}>
           <button className="role-card" type="button" onClick={() => onAdd('franchise')}>
@@ -454,7 +459,7 @@ export function RestoPlacesPage({ go, restaurant, restaurants, archivedRestauran
             <ChevronRight size={18} color="var(--muted-soft)" />
           </button>
         </div>
-      </section>
+      </section>}
 
       <button className="settings-row" type="button" style={{ marginTop: 24 }} onClick={() => switchRole?.('member')}>
         <span>

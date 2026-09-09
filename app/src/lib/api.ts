@@ -114,9 +114,23 @@ export function getAccount(): Account | null {
   } catch { logoutAccount(); return null }
 }
 
-export async function requestLoginLink(email: string): Promise<LoginLinkResponse> {
-  return apiCall<LoginLinkResponse>('POST', '/auth/magic-link', { body: { email: email.trim().toLowerCase() } })
+export async function requestLoginLink(email: string, intent: 'member' | 'restaurant' = 'member'): Promise<LoginLinkResponse> {
+  return apiCall<LoginLinkResponse>('POST', '/auth/magic-link', { body: { email: email.trim().toLowerCase(), ...(intent === 'restaurant' ? { intent } : {}) } })
 }
+
+export interface RegistryResult { state: 'FOUND' | 'NOT_FOUND' | 'UNAVAILABLE'; siret: string; legalName?: string; address?: string; postalCode?: string; city?: string; activity?: string; active?: boolean; checkedAt: string }
+export interface RestaurantApplicationInput { siret: string; tradingName: string; cuisine: string; address: string; postalCode: string; city: string; contactName: string; contactRole: 'OWNER' | 'MANAGER' | 'REPRESENTATIVE'; phone: string; website: string; message: string; authorized: boolean }
+export interface RestaurantApplication extends Omit<RestaurantApplicationInput, 'authorized'> { id: string; status: 'PENDING' | 'APPROVED' | 'REJECTED'; registry: RegistryResult; decisionReason: string; createdAt: string; restaurant: { id: string; slug: string; name: string; status: string } | null; applicant?: { email: string }; verificationNote?: string }
+async function accountRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
+  if (!getAccount()) throw new Error('Connectez-vous par e-mail pour gérer votre établissement.')
+  await ensureSession('member')
+  return apiCall<T>(method, path, { role: 'member', body })
+}
+export const lookupRestaurantSiret = (siret: string) => accountRequest<RegistryResult>('GET', `/owner/registration/siret/${encodeURIComponent(siret.replace(/\s/g, ''))}`)
+export const fetchRestaurantApplications = () => accountRequest<RestaurantApplication[]>('GET', '/owner/applications')
+export const submitRestaurantApplication = (input: RestaurantApplicationInput, id?: string) => accountRequest<RestaurantApplication>(id ? 'PUT' : 'POST', id ? `/owner/applications/${encodeURIComponent(id)}` : '/owner/applications', input)
+export const fetchAdminApplications = (status = 'PENDING') => accountRequest<RestaurantApplication[]>('GET', `/admin/restaurant-applications?status=${encodeURIComponent(status)}`)
+export const decideRestaurantApplication = (id: string, decision: { approve: true; authorityVerified: true; activityVerified: true; verificationNote: string } | { approve: false; reason: string }) => accountRequest<RestaurantApplication>('POST', `/admin/restaurant-applications/${encodeURIComponent(id)}/decision`, decision)
 
 // React StrictMode peut relancer l'effet de démarrage : un lien n'est vérifié qu'une fois.
 const loginFlights = new Map<string, Promise<Account>>()

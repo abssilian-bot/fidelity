@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronRight, Database, Star, Store, Trash2 } from 'lucide-react'
+import { ChevronRight, Database, ShieldCheck, Star, Store, Trash2 } from 'lucide-react'
 import { getMember, userReviews, userVisits } from '../data'
 import type { CommonProps } from '../nav'
 import { Tabs } from '../components/kit'
@@ -66,6 +66,7 @@ export function SettingsPage({ go, favorites, toggleFavorite, resolveRestaurant,
       </p>
 
       <AccountSection />
+      {getAccount()?.user.role === 'ADMIN' && <button className="settings-row" type="button" onClick={() => go('adminRestaurants')}><ShieldCheck size={20} /><span><strong>Valider les restaurants</strong><small>Examiner les dossiers d’inscription</small></span></button>}
 
       {!getAccount() && <UserProfileSummary
         onOpen={() => go('userProfile')}
@@ -113,8 +114,8 @@ export function SettingsPage({ go, favorites, toggleFavorite, resolveRestaurant,
             <Store size={18} />
           </span>
           <span>
-            <strong style={{ fontSize: 14.5 }}>Passer à l’interface restaurateur</strong>
-            <small>Résumé, façade, FoodShare et établissements.</small>
+            <strong style={{ fontSize: 14.5 }}>Mon espace restaurateur</strong>
+            <small>Me connecter, inscrire ou gérer mon restaurant.</small>
           </span>
           <ChevronRight size={18} color="var(--muted-soft)" />
         </button>

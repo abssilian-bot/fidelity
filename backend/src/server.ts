@@ -9,6 +9,7 @@ import { registerSecurityHeaders, registerErrorHandler, rateLimit } from './lib/
 import { registerAuth } from './lib/auth.js'
 import { authRoutes } from './routes/auth.js'
 import { restaurantRoutes } from './routes/restaurants.js'
+import { restaurantRegistrationRoutes } from './routes/restaurant-registration.js'
 import { membershipRoutes } from './routes/memberships.js'
 import { ledgerRoutes } from './routes/ledger.js'
 import { shareRoutes } from './routes/shares.js'
@@ -49,6 +50,7 @@ app.get('/health', async () => ({ status: 'ok', service: 'fidelity-api' }))
 // Routes métier
 authRoutes(app, prisma)
 restaurantRoutes(app, prisma)
+restaurantRegistrationRoutes(app, prisma)
 membershipRoutes(app, prisma)
 ledgerRoutes(app, prisma)
 shareRoutes(app, prisma)

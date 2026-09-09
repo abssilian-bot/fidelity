@@ -1,5 +1,7 @@
 # Préparation Apple — état vérifié du 8 septembre 2026
 
+Mise à jour du 9 septembre : le parcours d’inscription des restaurants et leur validation administrative sont implémentés et testés ; voir [INSCRIPTION-RESTAURATEURS.md](INSCRIPTION-RESTAURATEURS.md). Les comptes réels soumettent un dossier enregistré au serveur ; la création locale de brouillons d’établissements est limitée à la démo hors ligne. Les autres obstacles ci-dessous restent à traiter.
+
 Le dépôt est une application web React et une API Fastify. Il ne contient pas encore de projet iOS, de binaire signé ou de fiche App Store Connect. Le compte Apple Developer est actif et le certificat Wallet a été créé. L'installation d'une carte depuis un site et la soumission d'une application à l'App Store sont deux livraisons distinctes.
 
 ## Livré dans le code

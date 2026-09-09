@@ -30,6 +30,8 @@ export type RouteName =
   | 'restoFacade'
   | 'restoFoodshare'
   | 'restoPlaces'
+  | 'restoRegistration'
+  | 'adminRestaurants'
 
 export type AppRole = 'member' | 'restaurant'
 

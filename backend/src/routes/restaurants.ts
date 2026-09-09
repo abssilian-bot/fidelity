@@ -122,6 +122,9 @@ export function restaurantRoutes(app: FastifyInstance, prisma: PrismaClient) {
     if ('error' in check && check.error) {
       return reply.code(check.error).send({ error: check.error === 404 ? 'Restaurant introuvable.' : 'Accès interdit : ce restaurant ne t’appartient pas.' })
     }
+    if (check.restaurant?.siret && req.userRole !== 'ADMIN' && data.address !== undefined && data.address !== check.restaurant.address) {
+      return reply.code(409).send({ error: 'Cette adresse a été vérifiée. Contactez Fidelity pour faire valider un changement d’établissement.' })
+    }
     return prisma.$transaction(async tx => {
       const saved = await tx.restaurant.update({ where: { id }, data, select: publicSelect })
       await markRestaurantWalletsChanged(tx, id)

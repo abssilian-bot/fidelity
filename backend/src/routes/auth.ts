@@ -6,8 +6,9 @@ import type { PrismaClient } from '@prisma/client'
 import { createHash } from 'node:crypto'
 import { PrivateResend } from '../lib/private-resend.js'
 import { loginEmail } from '../lib/login-email.js'
+import { isConfiguredAdmin } from '../lib/restaurant-registration.js'
 
-const emailSchema = z.object({ email: z.string().trim().toLowerCase().pipe(z.email().max(254)) })
+const emailSchema = z.object({ email: z.string().trim().toLowerCase().pipe(z.email().max(254)), intent: z.enum(['member', 'restaurant']).default('member') })
 
 // Flux « lien magique » :
 // 1. POST /auth/magic-link { email }  → le serveur génère un lien de connexion
@@ -27,7 +28,7 @@ export function authRoutes(app: FastifyInstance, prisma: PrismaClient) {
 
   app.post('/auth/magic-link', { preHandler: authRateLimit }, async (req, reply) => {
     reply.header('Cache-Control', 'no-store')
-    const { email } = emailSchema.parse(req.body)
+    const { email, intent } = emailSchema.parse(req.body)
     if (!resend && process.env.NODE_ENV === 'production') return reply.code(503).send({ error: 'Connexion par e-mail temporairement indisponible.' })
     const token = signToken({ scope: 'magic', email, nonce: randomCode() }, 15 * 60)
     if (resend) {
@@ -37,6 +38,7 @@ export function authRoutes(app: FastifyInstance, prisma: PrismaClient) {
         const link = new URL('./', appUrl.href.endsWith('/') ? appUrl : `${appUrl.href}/`)
         link.search = ''; link.hash = ''
         link.searchParams.set('token', token)
+        if (intent === 'restaurant') link.searchParams.set('espace', 'restaurant')
         const { error } = await resend.emails.send({
           from: process.env.EMAIL_FROM || 'Fidelity <onboarding@resend.dev>',
           to: email,
@@ -72,8 +74,8 @@ export function authRoutes(app: FastifyInstance, prisma: PrismaClient) {
         await tx.usedMagicLink.create({ data: { tokenHash, expiresAt: new Date(payload.exp) } })
         return tx.user.upsert({
           where: { email: payload.email },
-          update: {},
-          create: { email: payload.email },
+          update: isConfiguredAdmin(payload.email) ? { role: 'ADMIN' } : {},
+          create: { email: payload.email, ...(isConfiguredAdmin(payload.email) ? { role: 'ADMIN' as const } : {}) },
           select: { id: true, email: true, pseudo: true, displayName: true, role: true },
         })
       })

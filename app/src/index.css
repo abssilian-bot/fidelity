@@ -1141,3 +1141,17 @@ textarea { resize: vertical; }
   .qr-poster-page .poster { margin: 0; padding: 24mm 12mm; gap: 12mm; break-inside: avoid; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
   .qr-poster-page .poster svg { width: 80mm; height: 80mm; }
 }
+/* Inscription et contrôle des établissements. */
+.registration-page h1 { margin: 8px 0; }
+.registration-page .lead { margin: 0 0 20px; }
+.registration-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.registration-heading h2 { margin: 0; }
+.registration-notice { display: flex; flex-direction: column; gap: 7px; padding: 16px; border: 1px solid var(--line, #e6d8c9); border-radius: 16px; background: var(--paper, #fffaf4); overflow-wrap: anywhere; }
+.registration-notice p { margin: 0; }
+.registration-notice small, .registration-page .muted { line-height: 1.55; }
+.registration-page .form-section { margin-top: 20px; }
+.registration-page .form-section h2 { margin: 0; }
+.registration-columns { display: grid; grid-template-columns: 1fr 2fr; gap: 12px; }
+.registration-columns > label { min-width: 0; }
+.registration-page .registration-consent { display: flex; align-items: flex-start; gap: 10px; line-height: 1.5; font-size: 14px; }
+.registration-page .registration-consent input { flex: 0 0 auto; width: 20px; height: 20px; margin: 1px 0 0; accent-color: #c4410f; }

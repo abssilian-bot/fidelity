@@ -24,7 +24,8 @@ async function fixture(t, { resend = false, sendError = false, throwError = fals
   const app = Fastify({ logger: { stream: { write: line => logs.push(line) } } })
   registerAuth(app, { user: { findUnique: async () => ({ role: 'MEMBER' }) }, revokedSession: { findUnique: async () => null } }); registerErrorHandler(app)
   const upsert = async args => {
-    if (!users.has(args.where.email)) users.set(args.where.email, { id: 'user-' + users.size, ...args.create, role: 'MEMBER', pseudo: null, displayName: null })
+    if (!users.has(args.where.email)) users.set(args.where.email, { id: 'user-' + users.size, role: 'MEMBER', ...args.create, pseudo: null, displayName: null })
+    else Object.assign(users.get(args.where.email), args.update)
     return users.get(args.where.email)
   }
   authRoutes(app, {
@@ -100,6 +101,26 @@ test('E-mail invalide rejeté avant envoi', async t => {
   const { request, messages } = await fixture(t, { resend: true })
   assert.equal((await request('pas-un-email')).statusCode, 400)
   assert.equal(messages.length, 0)
+})
+
+test('Lien restaurateur : destination conservée, aucun rôle accordé par le formulaire', async t => {
+  const { app, messages } = await fixture(t, { resend: true })
+  assert.equal((await app.inject({ method: 'POST', url: '/auth/magic-link', payload: { email: 'restaurateur@example.com', intent: 'restaurant', role: 'ADMIN' } })).statusCode, 200)
+  const link = new URL(messages[0].text.match(/https:\/\/fidelity\.example\/\?token=\S+/)[0])
+  assert.equal(link.searchParams.get('espace'), 'restaurant')
+  const result = await app.inject('/auth/verify?token=' + link.searchParams.get('token'))
+  assert.equal(result.json().user.role, 'MEMBER')
+})
+
+test('Désignation admin : privilège seulement après validation du lien de l’adresse configurée', async t => {
+  const previous = process.env.FIDELITY_ADMIN_EMAILS; process.env.FIDELITY_ADMIN_EMAILS = 'admin@example.com'
+  t.after(() => { if (previous === undefined) delete process.env.FIDELITY_ADMIN_EMAILS; else process.env.FIDELITY_ADMIN_EMAILS = previous })
+  const { app, request, users } = await fixture(t)
+  const link = new URL((await request('admin@example.com')).json().devLink)
+  assert.equal(users.size, 0)
+  const result = await app.inject('/auth/verify?token=' + link.searchParams.get('token'))
+  assert.equal(result.json().user.role, 'ADMIN')
+  assert.equal((await app.inject('/auth/verify?token=' + link.searchParams.get('token'))).statusCode, 401)
 })
 
 test('Production sans clé Resend : aucun devLink ni token exposé', async t => {

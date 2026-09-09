@@ -23,6 +23,7 @@ import { WEEK_DAYS } from './lib/search-catalog'
 import { readMyCards, saveMyCards, usedCardIds } from './lib/my-cards'
 import { ScanPage } from './pages/Scan'
 import { frontRestaurantId } from './lib/api'
+import { AdminRestaurantsPage, RestaurantRegistrationPage } from './pages/RestaurantRegistration'
 
 const MAIN_PAGES = new Set<RouteName>([
   'home',
@@ -61,14 +62,15 @@ const makeDraft = (restaurant: Restaurant): RestoDraft => ({
 const startupUrl = new URL(window.location.href)
 const startupLoginToken = startupUrl.searchParams.get('token')
 const startupRestaurant = startupUrl.searchParams.get('restaurant')
+const startupRole = (() => { try { return startupUrl.searchParams.get('espace') === 'restaurant' || localStorage.getItem('fidelity.interface') === 'restaurant' ? 'restaurant' : 'member' } catch { return 'member' } })()
 if (startupUrl.searchParams.has('token')) {
   startupUrl.searchParams.delete('token')
   window.history.replaceState(window.history.state, '', `${startupUrl.pathname}${startupUrl.search}${startupUrl.hash}`)
 }
 
 function App() {
-  const [role, setRole] = useState<AppRole | null>(() => getAccount() || startupRestaurant ? 'member' : null)
-  const [route, setRoute] = useState<Route>(startupRestaurant && /^[a-z0-9-]{1,120}$/.test(startupRestaurant) ? { name: 'restaurant', restaurantId: frontRestaurantId(startupRestaurant) } : { name: 'home' })
+  const [role, setRole] = useState<AppRole | null>(() => startupRestaurant ? 'member' : getAccount() || startupRole === 'restaurant' ? startupRole : null)
+  const [route, setRoute] = useState<Route>(startupRestaurant && /^[a-z0-9-]{1,120}$/.test(startupRestaurant) ? { name: 'restaurant', restaurantId: frontRestaurantId(startupRestaurant) } : { name: startupRole === 'restaurant' ? 'restoDashboard' : 'home' })
   const [, setRouteStack] = useState<Route[]>([])
   const [favorites, setFavorites] = useState<Set<string>>(new Set(['amina', 'comptoir', 'miso']))
   const [toast, setToast] = useState('')
@@ -144,6 +146,7 @@ function App() {
   const [activeRestoId, setActiveRestoId] = useState('amina')
   const [drafts, setDrafts] = useState<Record<string, RestoDraft>>({})
   const [ownerAccess, setOwnerAccess] = useState<'loading' | 'ready' | 'none'>('loading')
+  const [ownerRefresh, setOwnerRefresh] = useState(0)
   useEffect(() => {
     if (role !== 'restaurant' || !backend) return
     let cancelled = false
@@ -155,9 +158,10 @@ function App() {
       setMyRestaurants(ids)
       setActiveRestoId(current => ids.includes(current) ? current : ids[0] || '')
       setOwnerAccess(ids.length ? 'ready' : 'none')
+      setBackend(current => current ? { ...current } : current)
     }).catch(() => { if (!cancelled) setOwnerAccess('none') })
     return () => { cancelled = true }
-  }, [role, backend?.connected])
+  }, [role, backend?.connected, ownerRefresh])
 
   // Espace restaurateur : clients réels du restaurant actif
   useEffect(() => {
@@ -446,7 +450,11 @@ function App() {
   }
 
   const switchRole = (next: AppRole) => {
+    try { localStorage.setItem('fidelity.interface', next) } catch { /* Le choix d’interface reste utilisable sans stockage. */ }
+    const url = new URL(window.location.href); url.searchParams.delete('espace')
+    window.history.replaceState(window.history.state, '', url.pathname + url.search)
     setRole(next)
+    if (next === 'restaurant') { setOwnerAccess('loading'); setOwnerRefresh(value => value + 1) }
     setRouteStack([])
     setRoute({ name: next === 'restaurant' ? 'restoDashboard' : 'home' })
     window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior })
@@ -546,6 +554,12 @@ function App() {
     case 'settings':
       page = <SettingsPage {...common} />
       break
+    case 'restoRegistration':
+      page = <RestaurantRegistrationPage {...common} />
+      break
+    case 'adminRestaurants':
+      page = <AdminRestaurantsPage />
+      break
     case 'userProfile':
       page = <UserProfilePage {...common} />
       break
@@ -624,12 +638,8 @@ function App() {
       page = <HomePage {...common} restaurants={resolvedRestaurants} backendConnected={backend?.connected ?? false} filters={searchFilters} setFilters={setSearchFilters} />
   }
 
-  if (role === 'restaurant' && ownerAccess !== 'ready' && route.name !== 'settings' && route.name !== 'restoScan') {
-    page = <main className="page page-with-nav"><span className="eyebrow">Espace restaurateur</span><h1>Ton établissement</h1>
-      <p>{ownerAccess === 'loading' ? 'Chargement de tes établissements…' : 'Connecte-toi avec le compte propriétaire d’un restaurant validé. Les cartes de ses clients seront accessibles ici.'}</p>
-      {ownerAccess === 'none' && <button className="primary-button full" type="button" onClick={() => go('settings')}>Ouvrir mon compte</button>}
-      <button className="outline-button full" type="button" style={{ marginTop: 12 }} onClick={() => switchRole('member')}>Revenir à l’espace membre</button>
-    </main>
+  if (role === 'restaurant' && ownerAccess !== 'ready' && !['settings', 'restoRegistration', 'adminRestaurants'].includes(route.name)) {
+    page = ownerAccess === 'loading' ? <main className="page"><h1>Espace restaurateur</h1><p role="status">Chargement de vos établissements…</p></main> : <RestaurantRegistrationPage {...common} />
   }
 
   if (backend === null) {
@@ -664,7 +674,7 @@ function App() {
       <div className={`app-shell ${route.name === 'story' ? 'story-shell' : ''} ${MAIN_PAGES.has(route.name) ? '' : 'has-fixed-back'}`}>
         {!MAIN_PAGES.has(route.name) && route.name !== 'story' && <BackButton onClick={goBack} />}
         {page}
-        {MAIN_PAGES.has(route.name) && <BottomNav role={role} active={route.name} onSelect={goMain} />}
+        {MAIN_PAGES.has(route.name) && !(role === 'restaurant' && ownerAccess !== 'ready') && <BottomNav role={role} active={route.name} onSelect={goMain} />}
         {toast && <div className="toast">{toast}</div>}
       </div>
     </div>
