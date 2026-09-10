@@ -28,12 +28,17 @@ const app = Fastify({ routerOptions: { maxParamLength: 200 }, logger: {
 trustProxy: process.env.TRUSTED_PROXIES?.split(',').map(value => value.trim()).filter(Boolean) || false })
 
 // CORS : uniquement les fronts autorisés (dev local par défaut, prod via env)
-const allowedOrigins = (
+const configuredOrigins = (
   process.env.ALLOWED_ORIGINS ??
   'http://localhost:3000,http://localhost:5173,http://localhost:5174,http://localhost:7100,http://127.0.0.1:7100'
 )
   .split(',')
   .map((o) => o.trim())
+// L'app native (coque Capacitor iOS/Android) appelle l'API depuis ces origines —
+// toujours autorisées, indépendamment d'ALLOWED_ORIGINS.
+const allowedOrigins = [
+  ...new Set([...configuredOrigins, 'capacitor://localhost', 'http://localhost', 'https://localhost']),
+]
 await app.register(cors, {
   origin: allowedOrigins,
   methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],

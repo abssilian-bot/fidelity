@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:ios": "tsc -b && vite build --mode ios && cap copy ios",
     "lint": "eslint .",
     "test:search": "node --experimental-strip-types --test scripts/test-search.mjs",
     "test:cards": "node --experimental-strip-types --test scripts/test-cards.mjs",
@@ -14,6 +15,8 @@
     "test:scan": "node --experimental-strip-types --test scripts/test-scan.mjs"
   },
   "dependencies": {
+    "@capacitor/core": "^8.5.1",
+    "@capacitor/ios": "^8.5.1",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
@@ -64,6 +67,7 @@
     "zod": "^4.3.5"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.1",
     "@eslint/js": "^9.39.1",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.5",
