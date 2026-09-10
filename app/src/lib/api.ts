@@ -102,6 +102,12 @@ export async function disconnectAccount(): Promise<void> {
   logoutAccount()
 }
 
+/** Suppression de compte (App Store 5.1.1) : efface tout côté serveur, puis nettoie la session locale. */
+export async function deleteAccountApi(): Promise<void> {
+  await accountRequest('DELETE', '/auth/me')
+  logoutAccount()
+}
+
 export function getAccount(): Account | null {
   const raw = storageGet('fidelity.account')
   if (!raw) return null

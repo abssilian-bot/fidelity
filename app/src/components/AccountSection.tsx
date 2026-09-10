@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import { Check, LoaderCircle, LogOut, Mail } from 'lucide-react'
-import { completeLogin, disconnectAccount, getAccount, requestLoginLink } from '../lib/api'
+import { Check, LoaderCircle, LogOut, Mail, Trash2 } from 'lucide-react'
+import { completeLogin, deleteAccountApi, disconnectAccount, getAccount, requestLoginLink } from '../lib/api'
 
 export function AccountSection({ intent = 'member' }: { intent?: 'member' | 'restaurant' }) {
   const account = getAccount()
@@ -9,6 +9,8 @@ export function AccountSection({ intent = 'member' }: { intent?: 'member' | 'res
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error' | 'connecting'>('idle')
   const [devLink, setDevLink] = useState('')
   const [error, setError] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const busy = status === 'sending' || status === 'connecting'
 
   async function request(event: FormEvent<HTMLFormElement>) {
@@ -43,6 +45,18 @@ export function AccountSection({ intent = 'member' }: { intent?: 'member' | 'res
     }
   }
 
+  async function removeAccount() {
+    if (deleting) return
+    setDeleting(true); setError('')
+    try {
+      await deleteAccountApi()
+      window.location.reload()
+    } catch (cause) {
+      setDeleting(false); setConfirmDelete(false)
+      setError(cause instanceof Error ? cause.message : 'Suppression impossible pour le moment. Réessaie plus tard.')
+    }
+  }
+
   return (
     <section className="form-section account-section" aria-labelledby="account-heading">
       <h2 id="account-heading" style={{ margin: 0 }}>{intent === 'restaurant' ? 'Mon compte restaurateur' : 'Compte'}</h2>
@@ -58,6 +72,25 @@ export function AccountSection({ intent = 'member' }: { intent?: 'member' | 'res
             try { await disconnectAccount(); window.location.reload() }
             catch { setStatus('error'); setError('Le serveur est indisponible. Réessaie pour terminer la déconnexion sécurisée.') }
           }}><LogOut size={17} /> {busy ? 'Déconnexion…' : 'Déconnexion'}</button>
+          {!confirmDelete ? (
+            <button className="outline-button full account-delete-link" type="button" disabled={busy} onClick={() => { setConfirmDelete(true); setError('') }}>
+              <Trash2 size={16} /> Supprimer mon compte
+            </button>
+          ) : (
+            <div className="account-delete-confirm" role="alertdialog" aria-label="Confirmer la suppression du compte">
+              <p style={{ margin: 0, fontSize: 14, lineHeight: 1.55 }}>
+                <strong>Tout sera effacé définitivement</strong> : cartes, points, avis, publications et abonnements.
+                Cette action est irréversible.
+              </p>
+              <button className="danger-button full" type="button" disabled={deleting} onClick={() => void removeAccount()}>
+                {deleting ? <LoaderCircle size={17} className="animate-spin" /> : <Trash2 size={16} />}
+                {deleting ? 'Suppression…' : 'Confirmer la suppression définitive'}
+              </button>
+              <button className="outline-button full" type="button" disabled={deleting} onClick={() => setConfirmDelete(false)}>
+                Annuler
+              </button>
+            </div>
+          )}
           {error && <p className="card-action-error" role="alert">{error}</p>}
         </>
       ) : (

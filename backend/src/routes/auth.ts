@@ -100,6 +100,31 @@ export function authRoutes(app: FastifyInstance, prisma: PrismaClient) {
     return { message: 'Déconnexion effectuée.' }
   })
 
+  // Suppression de compte (exigence App Store 5.1.1) : efface le compte et toutes
+  // ses données personnelles en une transaction. Refusée si le compte possède un
+  // établissement — il doit d'abord le fermer ou le transférer.
+  app.delete('/auth/me', { preHandler: app.authenticate }, async (req, reply) => {
+    const userId = req.userId
+    const owned = await prisma.restaurant.count({ where: { ownerId: userId } })
+    if (owned > 0) {
+      return reply.code(409).send({
+        error: 'Ton compte possède un établissement — ferme-le ou transfère-le avant de supprimer ton compte.',
+      })
+    }
+    await prisma.$transaction(async (tx) => {
+      // Le ledger appartient aux adhésions des clients : on détache seulement les
+      // opérations que ce compte a validées en tant qu'opérateur (jamais d'effacement).
+      await tx.ledgerEntry.updateMany({ where: { authorId: userId }, data: { authorId: null } })
+      // Les posts du compte — leurs likes/commentaires partent en cascade.
+      await tx.post.deleteMany({ where: { authorId: userId } })
+      // Tout le reste cascade : adhésions (+ ledger, QR, passes Wallet), avis,
+      // likes, commentaires, follows, favoris, candidatures restaurateur.
+      await tx.user.delete({ where: { id: userId } })
+    })
+    // Le token devient inutilisable immédiatement : l'utilisateur n'existe plus.
+    return { message: 'Compte supprimé. Tes données personnelles ont été effacées.' }
+  })
+
   app.get('/auth/me', { preHandler: app.authenticate }, async (req, reply) => {
     reply.header('Cache-Control', 'no-store')
     const user = await prisma.user.findUnique({

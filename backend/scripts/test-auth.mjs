@@ -145,3 +145,50 @@ test('En-têtes de proxy inventés : le limiteur local ne peut pas être contour
     assert.equal(result.statusCode, i < 2 ? 200 : 429)
   }
 })
+
+// ── Suppression de compte (DELETE /auth/me — exigence App Store 5.1.1) ──
+async function deleteFixture(t, { owned = 0 } = {}) {
+  process.env.RESEND_API_KEY = ''
+  const calls = [], users = new Map([['user-1', { role: 'MEMBER' }]])
+  const tx = {
+    ledgerEntry: { updateMany: async (args) => { calls.push(['detach-ledger', args.where.authorId]) } },
+    post: { deleteMany: async (args) => { calls.push(['delete-posts', args.where.authorId]) } },
+    user: { delete: async (args) => { calls.push(['delete-user', args.where.id]); users.delete(args.where.id) } },
+  }
+  const prisma = {
+    restaurant: { count: async () => owned },
+    user: { findUnique: async ({ where }) => users.get(where.id) ?? null },
+    revokedSession: { findUnique: async () => null },
+    $transaction: async (callback) => callback(tx),
+  }
+  const app = Fastify({ logger: false })
+  registerAuth(app, prisma); registerErrorHandler(app); authRoutes(app, prisma)
+  t.after(async () => { await app.close() })
+  const token = signToken({ sub: 'user-1', role: 'MEMBER' }, 3600)
+  return { app, token, calls }
+}
+
+test('Suppression : ledger détaché, posts puis compte effacés, token ensuite refusé', async t => {
+  const { app, token, calls } = await deleteFixture(t)
+  const auth = { authorization: `Bearer ${token}` }
+  const response = await app.inject({ method: 'DELETE', url: '/auth/me', headers: auth })
+  assert.equal(response.statusCode, 200)
+  assert.deepEqual(calls, [['detach-ledger', 'user-1'], ['delete-posts', 'user-1'], ['delete-user', 'user-1']])
+  // Le compte n'existe plus : le même Bearer est immédiatement rejeté partout.
+  const after = await app.inject({ method: 'GET', url: '/auth/me', headers: auth })
+  assert.equal(after.statusCode, 401)
+})
+
+test('Suppression refusée (409) si le compte possède un établissement', async t => {
+  const { app, token, calls } = await deleteFixture(t, { owned: 2 })
+  const response = await app.inject({ method: 'DELETE', url: '/auth/me', headers: { authorization: `Bearer ${token}` } })
+  assert.equal(response.statusCode, 409)
+  assert.match(response.json().error, /établissement/)
+  assert.deepEqual(calls, [])
+})
+
+test('Suppression sans session : 401', async t => {
+  const { app } = await deleteFixture(t)
+  const response = await app.inject({ method: 'DELETE', url: '/auth/me' })
+  assert.equal(response.statusCode, 401)
+})
