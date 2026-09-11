@@ -1,0 +1,7 @@
+{
+  "name": "fidelity",
+  "private": true,
+  "scripts": {
+    "dev": "node dev.mjs"
+  }
+}
